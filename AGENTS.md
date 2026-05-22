@@ -10,15 +10,17 @@
 | `.skills/myc-business/SKILL.md` | Cuando la tarea trate sobre negocio, producto, roles, reglas de negocio, alcance funcional, clientes, actores o lenguaje oficial. |
 | `.skills/myc-architecture/SKILL.md` | Cuando la tarea trate sobre arquitectura, entidades, relaciones, permisos, trazabilidad, flujos técnicos, tecnologías declaradas o cambios de código. |
 | `.skills/skills-rules/SKILL.md` | Antes de crear, actualizar o revisar cualquier skill del proyecto. |
+| `.skills/project-best-practices/SKILL.md` | Antes de modificar código, crear componentes, agregar dependencias o tomar decisiones estructurales. Define el flujo de trabajo obligatorio y las reglas de consistencia. |
 
 ## Orden Recomendado De Lectura
 
 1. Leer la instrucción actual del usuario.
 2. Leer este `AGENTS.md` para ubicar las fuentes correctas.
-3. Consultar `LORE.md` como fuente original del proyecto.
-4. Consultar `myc-business` si la tarea es de negocio, producto, soporte, documentación funcional o estrategia.
-5. Consultar `myc-architecture` si la tarea es técnica, arquitectónica, de desarrollo o revisión de código.
-6. Consultar `skills-rules` antes de crear o modificar skills.
+3. Consultar `project-best-practices` para aplicar el flujo de trabajo y reglas antes de modificar código.
+4. Consultar `LORE.md` como fuente original del proyecto.
+5. Consultar `myc-business` si la tarea es de negocio, producto, soporte, documentación funcional o estrategia.
+6. Consultar `myc-architecture` si la tarea es técnica, arquitectónica, de desarrollo o revisión de código.
+7. Consultar `skills-rules` antes de crear o modificar skills.
 
 ## Reglas Para Agentes
 
@@ -28,6 +30,7 @@
 - Si existe conflicto entre instrucciones del usuario y documentación del proyecto, seguir la instrucción del usuario solo si no contradice seguridad, integridad del proyecto o fuente de verdad.
 - Consultar `.skills/myc-business/SKILL.md` para entender negocio y dominio.
 - Consultar `.skills/myc-architecture/SKILL.md` para entender arquitectura y desarrollo.
+- Consultar `.skills/project-best-practices/SKILL.md` antes de modificar código, crear componentes, agregar dependencias o tomar decisiones estructurales.
 - Consultar `.skills/skills-rules/SKILL.md` antes de crear o modificar cualquier skill.
 - Mantener respuestas y documentación del proyecto en español claro.
 
