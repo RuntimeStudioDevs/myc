@@ -20,9 +20,9 @@ MYC es una aplicación interna para seguimiento de obras de una sola constructor
 - `next.config.ts`, `tsconfig.json`, `eslint.config.mjs` y `postcss.config.mjs` contienen configuración técnica del repositorio.
 - `public/` contiene recursos públicos.
 - `LORE.md` contiene la fuente original del conocimiento del proyecto.
-- `.skills/` contiene skills documentales del proyecto.
+- `.agents/skills/` contiene skills documentales y operativas del proyecto.
 
-Tecnologías declaradas en `package.json`:
+Tecnologías instaladas actualmente y declaradas en `package.json`:
 
 - Next.js `16.2.6`.
 - React `19.2.4`.
@@ -31,6 +31,16 @@ Tecnologías declaradas en `package.json`:
 - ESLint `^9` con `eslint-config-next` `16.2.6`.
 - Tailwind CSS `^4` con `@tailwindcss/postcss` `^4`.
 - `babel-plugin-react-compiler` `1.0.0`.
+- Supabase JS y Supabase SSR.
+- Prisma y Prisma Client.
+
+Decisión técnica de datos y autenticación:
+
+- Base de datos principal: PostgreSQL.
+- Plataforma backend gestionada: Supabase.
+- ORM/capa de acceso a datos de la aplicación: Prisma.
+- Autenticación: Supabase Auth apoyado en PostgreSQL.
+- La integración actual cubre Google OAuth, login/registro con email/password, sesión SSR con cookies, ruta protegida `/protected` con validación servidor y seed de administrador vía `npm run seed:admin`. No incluye modelos de negocio, roles del dominio, RLS, perfiles ni autorización por obra asignada.
 
 ## Arquitectura Conceptual
 
@@ -181,6 +191,18 @@ Cierre de obra:
 - Cada usuario edita solo sus propios comentarios.
 - `super_admin` puede intervenir cualquier comentario.
 - Cliente solo ve sus propias obras.
+- Supabase Auth debe resolver autenticación, pero la autorización de negocio debe validar rol, autoría y asignación por obra.
+- No tratar una sesión autenticada como permiso suficiente para leer o modificar datos del dominio.
+
+## Criterios Para Supabase, Prisma Y PostgreSQL
+
+- Usar Prisma para modelado y acceso a datos de la aplicación sobre PostgreSQL.
+- Usar Supabase como proveedor gestionado de PostgreSQL y autenticación.
+- Consultar `.agents/skills/supabase/SKILL.md` antes de implementar autenticación, clientes, migraciones, RLS, Storage, Edge Functions o configuración de Supabase.
+- Consultar `.agents/skills/supabase-postgres-best-practices/SKILL.md` antes de diseñar u optimizar esquemas, consultas, índices, RLS o configuración de PostgreSQL.
+- Mantener credenciales, URLs y secretos en variables de entorno; no hardcodearlos en código, documentación pública ni ejemplos reales.
+- No inventar tablas, modelos Prisma, políticas RLS, buckets, providers OAuth ni flujos de login sin respaldo en `LORE.md` o una decisión explícita posterior.
+- Si se exponen tablas mediante APIs de Supabase, las políticas de acceso deben reflejar las reglas del dominio y no limitarse a verificar autenticación.
 
 ## Estado, Progreso Y Trazabilidad
 
@@ -210,6 +232,7 @@ Cierre de obra:
 - Mantener al menos un ingeniero asignado y un ingeniero principal por obra.
 - Evitar introducir multiempresa, aprobación de actualizaciones, comentarios internos ocultos al cliente, permisos avanzados por acción o chat en tiempo real como comportamiento del MVP.
 - Cuando un cambio toque APIs o convenciones de Next.js, revisar la documentación local en `node_modules/next/dist/docs/` antes de modificar código.
+- Toda implementación futura de Supabase, Prisma o PostgreSQL debe mantener TypeScript strict, evitar `any`, y pasar `npm run lint` y `npm run build` antes de entrega.
 
 ## Criterios Para Decisiones Técnicas Futuras
 

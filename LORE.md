@@ -11,6 +11,29 @@ Construir una plataforma interna para **una sola constructora** que permita:
 * permitir que el cliente consulte sus obras, historial, progreso y conversación
 * centralizar toda la comunicación de seguimiento en un solo lugar
 
+## 1.1. Decisión técnica base
+
+MYC usará PostgreSQL como base de datos principal, Supabase como plataforma backend gestionada y Prisma como ORM/capa de acceso a datos de la aplicación.
+
+La autenticación se basa en Supabase Auth apoyado en PostgreSQL con dos proveedores:
+
+- **Google OAuth**: provider externo configurado en Supabase Auth y Google Cloud Console.
+- **Email/password**: método nativo de Supabase Auth, implementado con `signInWithPassword` y `signUp`.
+
+La sesión se maneja con cookies SSR vía `@supabase/ssr` (`createServerClient`). La ruta `/protected` valida sesión con `getClaims()` + `getUser()` y muestra el rol `admin` de `app_metadata` si existe.
+
+El repositorio incluye un seed de administrador (`scripts/seed-admin.mjs`, vía `npm run seed:admin`) que usa la `SUPABASE_SERVICE_ROLE_KEY` para crear o actualizar un usuario con `app_metadata.role = "admin"`. Es idempotente: si el usuario ya existe, actualiza su rol.
+
+Los modelos de negocio, roles del dominio (`super_admin`, `ingeniero`, `marketing`, `cliente`), perfiles, RLS y autorización por obra asignada quedan para tareas posteriores.
+
+Las reglas de autorización del negocio siguen siendo las reglas funcionales de MYC: roles `super_admin`, `ingeniero`, `marketing` y `cliente`; acceso operativo por obra asignada; cliente limitado a sus propias obras; autoría para edición de contenido propio; e intervención total de `super_admin`.
+
+La autenticación por sí sola no autoriza acciones de negocio. Toda implementación debe validar rol, asignación por obra, autoría y trazabilidad según corresponda.
+
+Las credenciales, URLs y secretos de Supabase, PostgreSQL y Prisma deben manejarse mediante variables de entorno y nunca quedar hardcodeadas en el código ni en la documentación pública.
+
+`.env.local` contiene los valores reales y está en `.gitignore`. `.env.example` es la plantilla pública sin secretos.
+
 ---
 
 ## 2. Alcance del negocio
@@ -142,7 +165,7 @@ Campos sugeridos:
 * id
 * nombre
 * email
-* contraseña_hash
+* referencia a cuenta de autenticación gestionada por Supabase Auth/PostgreSQL
 * rol
 * activo
 * eliminado_en
@@ -680,7 +703,7 @@ entity "Usuario" as Usuario {
   --
   nombre : string
   email : string
-  contrasena_hash : string
+  referencia_auth : string
   rol : RolUsuario
   activo : boolean
   eliminado_en : datetime

@@ -100,7 +100,7 @@ Esta skill define reglas para crear, actualizar y mantener skills del proyecto M
 
 ## Checklist De Validación
 
-- La skill está en `.skills/<nombre-con-guiones>/SKILL.md`.
+- La skill está en `.agents/skills/<nombre-con-guiones>/SKILL.md`.
 - El `name` coincide con la carpeta.
 - El frontmatter YAML inicia y termina con `---`.
 - El frontmatter contiene `name` y `description`.

@@ -33,6 +33,18 @@ No activar para tareas exclusivamente informativas, de consulta o de documentaci
 | ESLint | ^9 + eslint-config-next |
 | React Compiler | Habilitado via next.config.ts |
 | Runtime | Node.js (default de Next.js) |
+| Supabase JS | Instalado para Auth/SSR |
+| Supabase SSR | Instalado para cookies en App Router |
+| Prisma | Instalado para PostgreSQL/Supabase |
+| Prisma Client | Instalado |
+
+Decisiones tecnicas de datos y autenticacion:
+
+- Base de datos principal: PostgreSQL.
+- Plataforma backend gestionada: Supabase.
+- ORM/capa de acceso a datos de la aplicacion: Prisma.
+- Autenticacion: Supabase Auth apoyado en PostgreSQL.
+- La integracion actual cubre Google OAuth, login/registro con email/password, sesion SSR con cookies, ruta protegida `/protected` con validacion servidor y seed de administrador via `npm run seed:admin`. No incluye modelos de negocio, roles del dominio, RLS, perfiles ni autorizacion por obra asignada.
 
 ## Estructura Del Proyecto
 
@@ -43,7 +55,7 @@ myc/
       layout.tsx          # Layout raiz
       page.tsx            # Pagina principal
       globals.css         # Estilos globales (Tailwind)
-  .skills/                # Skills documentales del proyecto
+  .agents/skills/         # Skills documentales y operativas del proyecto
   public/                 # Recursos estaticos
   LORE.md                 # Fuente original del proyecto
   AGENTS.md               # Orquestador raiz para agentes
@@ -65,6 +77,8 @@ myc/
 - **TypeScript**: Modo strict activo. No usar `any` sin justificacion explicita.
 - **ESLint**: Antes de entregar codigo, pasar `npm run lint`.
 - **Build**: Antes de entregar codigo significativo, verificar que `npm run build` compila sin errores.
+- **Stack de datos**: Supabase, Prisma y PostgreSQL son la base definida para datos y autenticacion.
+- **Autenticacion futura**: Supabase Auth resolvera autenticacion; la autorizacion de negocio debe validar rol, autoria y asignacion por obra.
 
 ## Flujo De Trabajo Obligatorio
 
@@ -73,9 +87,11 @@ myc/
 1. **Leer la solicitud completa** sin asumir nada. Identificar el objetivo real, no solo la accion inmediata.
 2. **Determinar el dominio afectado**: Si la tarea toca negocio, leer `LORE.md`. Si toca arquitectura, leer `myc-architecture`. Si toca ambos, leer ambos.
 3. **Consultar las skills relevantes** segun `AGENTS.md`:
-   - Negocio, roles, reglas funcionales → `.skills/myc-business/SKILL.md`
-   - Arquitectura, entidades, flujos tecnicos → `.skills/myc-architecture/SKILL.md`
-   - Reglas para modificar skills → `.skills/skills-rules/SKILL.md`
+   - Negocio, roles, reglas funcionales -> `.agents/skills/myc-business/SKILL.md`
+   - Arquitectura, entidades, flujos tecnicos -> `.agents/skills/myc-architecture/SKILL.md`
+   - Reglas para modificar skills -> `.agents/skills/skills-rules/SKILL.md`
+   - Supabase, Auth, RLS, migraciones o clientes -> `.agents/skills/supabase/SKILL.md`
+   - PostgreSQL, esquemas, consultas, indices o RLS -> `.agents/skills/supabase-postgres-best-practices/SKILL.md`
 4. **Identificar si la tarea requiere `next-best-practices`**: Si el cambio toca convenciones de Next.js, rutas, RSC, data fetching, metadata, imagenes, fuentes, manejo de errores o route handlers, consultar la skill `next-best-practices`.
 
 ### Fase 2 — Inspeccion
@@ -98,6 +114,7 @@ myc/
 14. **No hardcodear secretos, URLs de produccion ni credenciales**.
 15. **Respetar el vocabulario oficial del dominio** definido en `LORE.md`: roles (`super_admin`, `ingeniero`, `marketing`, `cliente`), estados de obra (`planeacion`, `en_progreso`, `en_pausa`, `completado`, `cancelado`), tipos de cliente (`persona`, `empresa`).
 16. **Si el proyecto no tiene carpeta `src/components/` o similar, no crearla sin preguntar**: En fase temprana del proyecto, las decisiones de estructura deben ser explicitas.
+17. **Si se implementa Supabase, Prisma o PostgreSQL en una tarea futura**: instalar dependencias solo con instruccion explicita, consultar las skills de Supabase, no crear esquemas ni clientes por anticipado y no tratar autenticacion como autorizacion suficiente.
 
 ### Fase 5 — Validacion
 
@@ -136,6 +153,7 @@ myc/
 - [ ] No hardcodeo secretos, URLs ni credenciales.
 - [ ] No invento tipos, entidades, roles ni flujos sin respaldo en `LORE.md`.
 - [ ] Sigo el vocabulario oficial del dominio.
+- [ ] Si trabajo con Supabase, Prisma o PostgreSQL, diferencio dependencias instaladas de decisiones tecnicas futuras.
 
 ## Checklist Antes De Entregar
 
@@ -163,6 +181,8 @@ myc/
 - `myc-architecture` define estructura tecnica, entidades y permisos.
 - `skills-rules` define como modificar skills existentes.
 - `next-best-practices` define convenciones tecnicas de Next.js.
+- `supabase` define reglas operativas para tareas con Supabase, Auth, RLS, migraciones, clientes y configuracion.
+- `supabase-postgres-best-practices` define buenas practicas para PostgreSQL, esquemas, consultas, indices, RLS y rendimiento.
 - Si una skill no cubre el problema, consultar `LORE.md` directamente.
 
 ## Reglas Para Manejar Ambiguedad
@@ -201,6 +221,7 @@ myc/
 8. **Mezclar idiomas**: Escribir comentarios en ingles, variables en espanol, o viceversa. Mantener separacion clara.
 9. **Hardcodear valores**: Dejar URLs, claves o configuraciones quemadas en el codigo.
 10. **No entregar resumen**: Terminar cambios sin comunicar que se hizo, que se valido y que queda pendiente.
+11. **Confundir autenticacion con autorizacion**: En futuras integraciones con Supabase Auth, validar tambien rol, autoria y asignacion por obra.
 
 ## Criterios De Finalizacion
 
@@ -222,3 +243,5 @@ Una tarea se considera completada cuando:
 | `npm run build` | Compilar para produccion (verifica TypeScript + Next.js) |
 | `npm run start` | Iniciar servidor en modo produccion |
 | `npm run lint` | Ejecutar ESLint |
+| `npm run seed:admin` | Crear/actualizar usuario administrador en Supabase Auth |
+| `npx prisma validate` | Validar esquema Prisma |
