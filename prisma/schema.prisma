@@ -1,0 +1,315 @@
+// ============================================================
+// MYC — Prisma Schema
+// ============================================================
+// Modelo de datos generado a partir de LORE.md.
+// 10 entidades, 6 enums, relaciones según el diagrama ER.
+//
+// Estrategia auth.users ↔ User:
+//   - User.id es FK a auth.users.id (identidad autenticada de Supabase Auth).
+//   - User es la tabla de perfil de dominio (rol, nombre, activo, etc.).
+//   - El email se almacena en User para consultas eficientes, pero la
+//     fuente de verdad del email es auth.users.email. Debe mantenerse
+//     sincronizado mediante trigger o lógica de aplicación.
+//   - No se almacena contraseña_hash: la autenticación la gestiona
+//     exclusivamente Supabase Auth.
+// ============================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["public"]
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  super_admin
+  ingeniero
+  marketing
+  cliente
+
+  @@schema("public")
+  @@map("rol_usuario")
+}
+
+enum ClientType {
+  persona
+  empresa
+
+  @@schema("public")
+  @@map("tipo_cliente")
+}
+
+enum ProjectStatus {
+  planeacion
+  en_progreso
+  en_pausa
+  completado
+  cancelado
+
+  @@schema("public")
+  @@map("estado_obra")
+}
+
+enum AssignmentRole {
+  ingeniero
+  marketing
+
+  @@schema("public")
+  @@map("rol_asignacion")
+}
+
+enum UpdateFileType {
+  foto
+  video
+
+  @@schema("public")
+  @@map("tipo_archivo_actualizacion")
+}
+
+enum ProjectFileType {
+  foto
+  documento
+  pdf
+  otro
+
+  @@schema("public")
+  @@map("tipo_archivo_obra")
+}
+
+// ============================================================
+// MODELOS DEL DOMINIO
+// ============================================================
+// La relacion User.id → auth.users.id se mantiene mediante FK
+// aplicado con SQL manual (ver prisma/sql/). auth.users es
+// gestionado por Supabase y no se modela en Prisma para evitar
+// que las migraciones modifiquen el esquema auth.
+
+// --- Usuario (perfil de dominio) ---
+model User {
+  id        String     @id @db.Uuid
+  name      String     @map("nombre")
+  email     String     @map("email")
+  role      UserRole   @map("rol")
+  active    Boolean    @default(true) @map("activo")
+  deletedAt DateTime?  @map("eliminado_en")
+  createdAt DateTime   @default(now()) @map("creado_en")
+  updatedAt DateTime   @updatedAt @map("actualizado_en")
+
+  // 1:1 con auth.users — mismo UUID como PK. La FK se aplica con SQL
+  // manual (ver prisma/sql/fk-usuario-auth.sql) porque AuthUser
+  // tiene @@ignore para que Prisma no modifique el esquema auth.
+
+  // Relaciones salientes
+  client             Client?
+  createdClients     Client[]              @relation("ClientCreatedBy")
+  createdProjects    Project[]             @relation("ProjectCreatedBy")
+  updatedProjects    Project[]             @relation("ProjectUpdatedBy")
+  assignments        ProjectAssignment[]
+  updates            ProjectUpdate[]
+  uploadedFiles      ProjectFile[]
+  statusHistories    ProjectStatusHistory[]
+  updateComments     UpdateComment[]
+  projectComments    ProjectComment[]
+
+  @@schema("public")
+  @@map("usuarios")
+}
+
+// --- Cliente ---
+model Client {
+  id          String     @id @default(uuid()) @db.Uuid
+  clientType  ClientType @map("tipo_cliente")
+  displayName String     @map("nombre_mostrar")
+  phone       String?    @map("telefono")
+  document    String?    @map("documento")
+  address     String?    @map("direccion")
+
+  // FK a User (cuenta de acceso del cliente) — 1:1
+  userId      String     @unique @map("usuario_id") @db.Uuid
+  user        User       @relation(fields: [userId], references: [id])
+
+  // FK a User (quién creó el cliente)
+  createdBy   String     @map("creado_por") @db.Uuid
+  creator     User       @relation("ClientCreatedBy", fields: [createdBy], references: [id])
+
+  deletedAt   DateTime?  @map("eliminado_en")
+  createdAt   DateTime   @default(now()) @map("creado_en")
+  updatedAt   DateTime   @updatedAt @map("actualizado_en")
+
+  projects    Project[]
+
+  @@schema("public")
+  @@map("clientes")
+}
+
+// --- Obra ---
+model Project {
+  id                String        @id @default(uuid()) @db.Uuid
+  clientId          String        @map("cliente_id") @db.Uuid
+  client            Client        @relation(fields: [clientId], references: [id])
+  name              String        @map("nombre")
+  description       String?       @map("descripcion")
+  currentStatus     ProjectStatus @default(planeacion) @map("estado_actual")
+  currentProgress   Int           @default(0) @map("progreso_actual")
+  startDate         DateTime?     @map("fecha_inicio")
+  estimatedEndDate  DateTime?     @map("fecha_fin_estimada")
+  archivedAt        DateTime?     @map("archivada_en")
+
+  // FK a User (quién creó la obra)
+  createdBy         String        @map("creado_por") @db.Uuid
+  creator           User          @relation("ProjectCreatedBy", fields: [createdBy], references: [id])
+
+  // FK a User (quién actualizó la obra por última vez)
+  updatedBy         String?       @map("actualizado_por") @db.Uuid
+  updater           User?         @relation("ProjectUpdatedBy", fields: [updatedBy], references: [id])
+
+  deletedAt         DateTime?     @map("eliminado_en")
+  createdAt         DateTime      @default(now()) @map("creado_en")
+  updatedAt         DateTime      @updatedAt @map("actualizado_en")
+
+  assignments       ProjectAssignment[]
+  updates           ProjectUpdate[]
+  files             ProjectFile[]
+  statusHistories   ProjectStatusHistory[]
+  comments          ProjectComment[]
+
+  @@schema("public")
+  @@map("obras")
+}
+
+// --- Asignación de obra ---
+model ProjectAssignment {
+  id            String         @id @default(uuid()) @db.Uuid
+  projectId     String         @map("obra_id") @db.Uuid
+  project       Project        @relation(fields: [projectId], references: [id])
+  userId        String         @map("usuario_id") @db.Uuid
+  user          User           @relation(fields: [userId], references: [id])
+  role          AssignmentRole @map("rol_asignacion")
+  isPrincipal   Boolean        @default(false) @map("es_principal")
+  assignedAt    DateTime       @default(now()) @map("asignado_en")
+  unassignedAt  DateTime?      @map("desasignado_en")
+  createdAt     DateTime       @default(now()) @map("creado_en")
+
+  @@schema("public")
+  @@map("asignaciones_obra")
+}
+
+// --- Actualización de obra ---
+model ProjectUpdate {
+  id                String         @id @default(uuid()) @db.Uuid
+  projectId         String         @map("obra_id") @db.Uuid
+  project           Project        @relation(fields: [projectId], references: [id])
+  authorId          String         @map("autor_id") @db.Uuid
+  author            User           @relation(fields: [authorId], references: [id])
+  title             String         @map("titulo")
+  description       String?        @map("descripcion")
+  effectiveDate     DateTime?      @map("fecha_efectiva")
+  resultingStatus   ProjectStatus? @map("estado_resultante_opcional")
+  resultingProgress Int?           @map("progreso_resultante_opcional")
+  editedAt          DateTime?      @map("editado_en")
+  deletedAt         DateTime?      @map("eliminado_en")
+  createdAt         DateTime       @default(now()) @map("creado_en")
+
+  files             UpdateFile[]
+  // 1:N — una actualización puede originar varios registros de historial
+  statusHistory     ProjectStatusHistory[]
+  comments          UpdateComment[]
+
+  @@schema("public")
+  @@map("actualizaciones_obra")
+}
+
+// --- Archivo de actualización ---
+model UpdateFile {
+  id         String         @id @default(uuid()) @db.Uuid
+  updateId   String         @map("actualizacion_id") @db.Uuid
+  update     ProjectUpdate  @relation(fields: [updateId], references: [id])
+  fileType   UpdateFileType @map("tipo_archivo")
+  url        String         @map("url")
+  fileName   String         @map("nombre_archivo")
+  size       Int            @map("tamano")
+  createdAt  DateTime       @default(now()) @map("creado_en")
+
+  @@schema("public")
+  @@map("archivos_actualizacion")
+}
+
+// --- Archivo de obra ---
+model ProjectFile {
+  id         String          @id @default(uuid()) @db.Uuid
+  projectId  String          @map("obra_id") @db.Uuid
+  project    Project         @relation(fields: [projectId], references: [id])
+  uploadedBy String          @map("subido_por") @db.Uuid
+  uploader   User            @relation(fields: [uploadedBy], references: [id])
+  fileType   ProjectFileType @map("tipo_archivo")
+  url        String          @map("url")
+  fileName   String          @map("nombre_archivo")
+  size       Int             @map("tamano")
+  deletedAt  DateTime?       @map("eliminado_en")
+  createdAt  DateTime        @default(now()) @map("creado_en")
+
+  @@schema("public")
+  @@map("archivos_obra")
+}
+
+// --- Historial de estado de obra ---
+model ProjectStatusHistory {
+  id                String        @id @default(uuid()) @db.Uuid
+  projectId         String        @map("obra_id") @db.Uuid
+  project           Project       @relation(fields: [projectId], references: [id])
+  previousStatus    ProjectStatus? @map("estado_anterior")
+  newStatus         ProjectStatus? @map("estado_nuevo")
+  previousProgress  Int?          @map("progreso_anterior")
+  newProgress       Int?          @map("progreso_nuevo")
+  changedBy         String        @map("cambiado_por") @db.Uuid
+  changer           User          @relation(fields: [changedBy], references: [id])
+  observation       String?       @map("observacion")
+
+  // FK opcional a ProjectUpdate — puede originarse de una actualización
+  relatedUpdateId   String?       @map("actualizacion_id_relacionada") @db.Uuid
+  relatedUpdate     ProjectUpdate? @relation(fields: [relatedUpdateId], references: [id])
+
+  createdAt         DateTime      @default(now()) @map("creado_en")
+
+  @@schema("public")
+  @@map("historial_estado_obra")
+}
+
+// --- Comentario de actualización ---
+model UpdateComment {
+  id         String        @id @default(uuid()) @db.Uuid
+  updateId   String        @map("actualizacion_id") @db.Uuid
+  update     ProjectUpdate @relation(fields: [updateId], references: [id])
+  authorId   String        @map("autor_id") @db.Uuid
+  author     User          @relation(fields: [authorId], references: [id])
+  content    String        @map("contenido")
+  editedAt   DateTime?     @map("editado_en")
+  deletedAt  DateTime?     @map("eliminado_en")
+  createdAt  DateTime      @default(now()) @map("creado_en")
+
+  @@schema("public")
+  @@map("comentarios_actualizacion")
+}
+
+// --- Comentario general de obra ---
+model ProjectComment {
+  id         String    @id @default(uuid()) @db.Uuid
+  projectId  String    @map("obra_id") @db.Uuid
+  project    Project   @relation(fields: [projectId], references: [id])
+  authorId   String    @map("autor_id") @db.Uuid
+  author     User      @relation(fields: [authorId], references: [id])
+  content    String    @map("contenido")
+  editedAt   DateTime? @map("editado_en")
+  deletedAt  DateTime? @map("eliminado_en")
+  createdAt  DateTime  @default(now()) @map("creado_en")
+
+  @@schema("public")
+  @@map("comentarios_obra")
+}

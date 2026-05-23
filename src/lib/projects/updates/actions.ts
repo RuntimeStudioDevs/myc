@@ -1,0 +1,239 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
+import { getCurrentUserProfile } from "@/lib/auth/session";
+import { prisma } from "@/lib/prisma";
+import {
+  canCreateProjectUpdate,
+  canEditProjectUpdate,
+  canDeleteProjectUpdate,
+} from "@/lib/projects/updates/queries";
+
+const VALID_STATUSES = [
+  "planeacion",
+  "en_progreso",
+  "en_pausa",
+  "completado",
+  "cancelado",
+] as const;
+
+export async function createProjectUpdateAction(formData: FormData) {
+  const profile = await getCurrentUserProfile();
+  if (!profile || !profile.active) {
+    redirect("/login?error=inactive");
+  }
+
+  const projectId = formData.get("projectId") as string;
+  const title = formData.get("title") as string;
+  const description = formData.get("description") as string;
+  const statusStr = formData.get("resultingStatus") as string;
+  const progressStr = formData.get("resultingProgress") as string;
+
+  if (!projectId || !title) {
+    return redirect(
+      `/dashboard/projects/${projectId}?error=missing-fields`,
+    );
+  }
+
+  // Validar obra
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+  });
+  if (!project || project.deletedAt) {
+    return redirect(
+      `/dashboard/projects/${projectId}?error=project-not-found`,
+    );
+  }
+
+  // Validar permiso de creacion
+  if (!(await canCreateProjectUpdate(profile, projectId))) {
+    return redirect(
+      `/dashboard/projects/${projectId}?error=not-authorized`,
+    );
+  }
+
+  // Validar estado opcional
+  let newStatus:
+    | (typeof VALID_STATUSES)[number]
+    | undefined;
+  if (statusStr) {
+    if (!VALID_STATUSES.includes(statusStr as (typeof VALID_STATUSES)[number])) {
+      return redirect(
+        `/dashboard/projects/${projectId}?error=invalid-status`,
+      );
+    }
+    newStatus = statusStr as (typeof VALID_STATUSES)[number];
+  }
+
+  // Validar progreso opcional
+  let newProgress: number | undefined;
+  if (progressStr) {
+    const parsed = parseInt(progressStr, 10);
+    if (isNaN(parsed) || parsed < 0 || parsed > 100) {
+      return redirect(
+        `/dashboard/projects/${projectId}?error=invalid-progress`,
+      );
+    }
+    newProgress = parsed;
+  }
+
+  // Regla: progreso 100 → completado
+  if (newProgress === 100) {
+    newStatus = "completado";
+  }
+
+  // Detectar si cambia estado o progreso
+  const statusChanged =
+    newStatus !== undefined && newStatus !== project.currentStatus;
+  const progressChanged =
+    newProgress !== undefined && newProgress !== project.currentProgress;
+
+  // Transaccion: update + historial + archivar si aplica
+  const shouldArchive =
+    newStatus === "completado" || newStatus === "cancelado";
+
+  await prisma.$transaction(async (tx) => {
+    // Crear actualizacion
+    const update = await tx.projectUpdate.create({
+      data: {
+        projectId,
+        authorId: profile.id,
+        title,
+        description: description || null,
+        resultingStatus: newStatus ?? null,
+        resultingProgress: newProgress ?? null,
+      },
+    });
+
+    // Cambiar estado/progreso de la obra si aplica
+    if (statusChanged || progressChanged) {
+      const updateData: Record<string, unknown> = {};
+
+      if (statusChanged && newStatus) {
+        updateData.currentStatus = newStatus;
+      }
+      if (progressChanged && newProgress !== undefined) {
+        updateData.currentProgress = newProgress;
+      }
+      if (shouldArchive && !project.archivedAt) {
+        updateData.archivedAt = new Date();
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        await tx.project.update({
+          where: { id: projectId },
+          data: updateData,
+        });
+      }
+
+      // Crear historial
+      await tx.projectStatusHistory.create({
+        data: {
+          projectId,
+          previousStatus: statusChanged
+            ? project.currentStatus
+            : null,
+          newStatus: statusChanged ? (newStatus ?? null) : null,
+          previousProgress: progressChanged
+            ? project.currentProgress
+            : null,
+          newProgress: progressChanged ? (newProgress ?? null) : null,
+          changedBy: profile.id,
+          relatedUpdateId: update.id,
+        },
+      });
+    }
+  });
+
+  revalidatePath(`/dashboard/projects/${projectId}`);
+  redirect(`/dashboard/projects/${projectId}?update-created=true`);
+}
+
+export async function updateProjectUpdateAction(formData: FormData) {
+  const profile = await getCurrentUserProfile();
+  if (!profile || !profile.active) {
+    redirect("/login?error=inactive");
+  }
+
+  const updateId = formData.get("updateId") as string;
+  const title = formData.get("title") as string;
+  const description = formData.get("description") as string;
+
+  if (!updateId || !title) {
+    return redirect(
+      `/dashboard/projects?error=missing-fields`,
+    );
+  }
+
+  const update = await prisma.projectUpdate.findUnique({
+    where: { id: updateId },
+    select: { id: true, projectId: true, deletedAt: true },
+  });
+
+  if (!update || update.deletedAt) {
+    return redirect(
+      `/dashboard/projects?error=update-not-found`,
+    );
+  }
+
+  if (!(await canEditProjectUpdate(profile, updateId))) {
+    return redirect(
+      `/dashboard/projects/${update.projectId}?error=not-authorized`,
+    );
+  }
+
+  await prisma.projectUpdate.update({
+    where: { id: updateId },
+    data: {
+      title,
+      description: description || null,
+      editedAt: new Date(),
+    },
+  });
+
+  revalidatePath(`/dashboard/projects/${update.projectId}`);
+  redirect(`/dashboard/projects/${update.projectId}?update-edited=true`);
+}
+
+export async function deleteProjectUpdateAction(formData: FormData) {
+  const profile = await getCurrentUserProfile();
+  if (!profile || !profile.active) {
+    redirect("/login?error=inactive");
+  }
+
+  const updateId = formData.get("updateId") as string;
+
+  if (!updateId) {
+    return redirect(
+      `/dashboard/projects?error=missing-fields`,
+    );
+  }
+
+  const update = await prisma.projectUpdate.findUnique({
+    where: { id: updateId },
+    select: { id: true, projectId: true, deletedAt: true },
+  });
+
+  if (!update || update.deletedAt) {
+    return redirect(
+      `/dashboard/projects?error=update-not-found`,
+    );
+  }
+
+  if (!(await canDeleteProjectUpdate(profile, updateId))) {
+    return redirect(
+      `/dashboard/projects/${update.projectId}?error=not-authorized`,
+    );
+  }
+
+  // Soft delete
+  await prisma.projectUpdate.update({
+    where: { id: updateId },
+    data: { deletedAt: new Date() },
+  });
+
+  revalidatePath(`/dashboard/projects/${update.projectId}`);
+  redirect(`/dashboard/projects/${update.projectId}?update-deleted=true`);
+}
