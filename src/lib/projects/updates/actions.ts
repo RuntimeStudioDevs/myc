@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { notFound } from "next/navigation";
 import { getCurrentUserProfile } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import {
@@ -213,7 +212,13 @@ export async function deleteProjectUpdateAction(formData: FormData) {
 
   const update = await prisma.projectUpdate.findUnique({
     where: { id: updateId },
-    select: { id: true, projectId: true, deletedAt: true },
+    select: {
+      id: true,
+      projectId: true,
+      deletedAt: true,
+      resultingStatus: true,
+      resultingProgress: true,
+    },
   });
 
   if (!update || update.deletedAt) {
@@ -228,10 +233,52 @@ export async function deleteProjectUpdateAction(formData: FormData) {
     );
   }
 
-  // Soft delete
-  await prisma.projectUpdate.update({
-    where: { id: updateId },
-    data: { deletedAt: new Date() },
+  const hadChange =
+    update.resultingProgress !== null || update.resultingStatus !== null;
+
+  // Transaccion: soft-delete + revertir progreso/estado + historial
+  await prisma.$transaction(async (tx) => {
+    await tx.projectUpdate.update({
+      where: { id: updateId },
+      data: { deletedAt: new Date() },
+    });
+
+    if (hadChange) {
+      const project = await tx.project.findUnique({
+        where: { id: update.projectId },
+        select: { currentStatus: true, currentProgress: true },
+      });
+      if (!project) return;
+
+      const historyEntry = await tx.projectStatusHistory.findFirst({
+        where: { relatedUpdateId: updateId },
+        orderBy: { createdAt: "desc" },
+        select: { previousStatus: true, previousProgress: true },
+      });
+
+      if (historyEntry) {
+        const newStatus = historyEntry.previousStatus ?? project.currentStatus;
+        const newProgress =
+          historyEntry.previousProgress ?? project.currentProgress;
+
+        await tx.project.update({
+          where: { id: update.projectId },
+          data: { currentStatus: newStatus, currentProgress: newProgress },
+        });
+
+        await tx.projectStatusHistory.create({
+          data: {
+            projectId: update.projectId,
+            previousStatus: project.currentStatus,
+            newStatus,
+            previousProgress: project.currentProgress,
+            newProgress,
+            changedBy: profile.id,
+            observation: "Actualizacion eliminada — progreso revertido",
+          },
+        });
+      }
+    }
   });
 
   revalidatePath(`/dashboard/projects/${update.projectId}`);

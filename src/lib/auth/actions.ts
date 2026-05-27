@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 
@@ -40,7 +41,7 @@ export async function signUpAction(formData: FormData) {
   const headersList = await headers();
   const origin = headersList.get("origin") ?? headersList.get("host") ?? "";
 
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -51,6 +52,21 @@ export async function signUpAction(formData: FormData) {
 
   if (error) {
     return redirect("/register?error=" + encodeURIComponent(error.message));
+  }
+
+  // Esperar a que el trigger cree el perfil de dominio
+  if (data.user) {
+    const supabaseAdmin = createAdminClient();
+    for (let i = 0; i < 5; i++) {
+      const { data: profile } = await supabaseAdmin
+        .from("usuarios")
+        .select("id")
+        .eq("id", data.user.id)
+        .maybeSingle();
+
+      if (profile) break;
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
   }
 
   redirect("/login?registered=true");

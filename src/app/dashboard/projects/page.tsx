@@ -200,7 +200,9 @@ export default async function ProjectsPage({
                                   ? "bg-red-100 text-red-800"
                                   : project.currentStatus === "en_progreso"
                                     ? "bg-blue-100 text-blue-800"
-                                    : "bg-neutral-100 text-neutral-700"
+                                    : project.currentStatus === "en_pausa"
+                                      ? "bg-yellow-100 text-yellow-800"
+                                      : "bg-neutral-100 text-neutral-700"
                             }`}
                           >
                             {project.currentStatus}
@@ -244,6 +246,11 @@ export default async function ProjectsPage({
                                   type="hidden"
                                   name="projectId"
                                   value={project.id}
+                                />
+                                <input
+                                  type="hidden"
+                                  name="description"
+                                  value={project.description ?? ""}
                                 />
                                 <input
                                   name="name"

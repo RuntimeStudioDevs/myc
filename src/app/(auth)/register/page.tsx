@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getCurrentAuthUser } from "@/lib/auth/session";
 import { signUpAction } from "@/lib/auth/actions";
 
@@ -82,9 +83,9 @@ export default async function RegisterPage({
 
         <p className="text-center text-sm text-neutral-500">
           Ya tienes cuenta?{" "}
-          <a href="/login" className="text-neutral-900 underline">
+          <Link href="/login" className="text-neutral-900 underline">
             Inicia sesion
-          </a>
+          </Link>
         </p>
       </div>
     </main>

@@ -142,3 +142,113 @@ export async function listActiveEngineers() {
     },
   });
 }
+
+/**
+ * Lista obras no eliminadas de un cliente especifico.
+ * Incluye ingeniero principal, actualizaciones, comentarios
+ * generales y conteo de actualizaciones.
+ */
+export async function listClientProjects(clientId: string) {
+  return prisma.project.findMany({
+    where: {
+      clientId,
+      deletedAt: null,
+    },
+    include: {
+      assignments: {
+        where: {
+          unassignedAt: null,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+        orderBy: {
+          assignedAt: "asc",
+        },
+      },
+      updates: {
+        where: {
+          deletedAt: null,
+        },
+        include: {
+          author: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
+          files: {
+            select: {
+              id: true,
+              fileType: true,
+              url: true,
+              fileName: true,
+              size: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      },
+      comments: {
+        where: {
+          deletedAt: null,
+        },
+        include: {
+          author: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+      },
+      files: {
+        where: {
+          deletedAt: null,
+        },
+        include: {
+          uploader: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      },
+      creator: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+}
+
+export type ClientProjectWithDetails = Awaited<
+  ReturnType<typeof listClientProjects>
+>[number];

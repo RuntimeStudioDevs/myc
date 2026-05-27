@@ -135,6 +135,14 @@ export async function deactivateInternalUserAction(formData: FormData) {
     data: { active: false },
   });
 
+  // Invalidar sesiones activas en Supabase Auth
+  try {
+    const supabaseAdmin = createAdminClient();
+    await supabaseAdmin.auth.admin.signOut(userId);
+  } catch {
+    console.warn("No se pudieron invalidar las sesiones de Supabase Auth para el usuario:", userId);
+  }
+
   revalidatePath("/dashboard/admin/users");
   redirect("/dashboard/admin/users?deactivated=true");
 }
