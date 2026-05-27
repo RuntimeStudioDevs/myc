@@ -22,6 +22,50 @@ import {
   updateProjectUpdateAction,
   deleteProjectUpdateAction,
 } from "@/lib/projects/updates/actions";
+import {
+  listUpdateComments,
+  canCreateUpdateComment,
+  canEditUpdateComment,
+  canDeleteUpdateComment,
+} from "@/lib/projects/updates/comments/queries";
+import {
+  createUpdateCommentAction,
+  editUpdateCommentAction,
+  deleteUpdateCommentAction,
+} from "@/lib/projects/updates/comments/actions";
+import {
+  listProjectComments,
+  canCreateProjectComment,
+  canEditProjectComment,
+  canDeleteProjectComment,
+} from "@/lib/projects/comments/queries";
+import {
+  createProjectCommentAction,
+  editProjectCommentAction,
+  deleteProjectCommentAction,
+} from "@/lib/projects/comments/actions";
+import {
+  listProjectFiles,
+  canUploadProjectFile,
+  canDeleteProjectFile,
+} from "@/lib/projects/files/queries";
+import {
+  uploadProjectFileAction,
+  deleteProjectFileAction,
+} from "@/lib/projects/files/actions";
+import {
+  canUploadUpdateFile,
+  canDeleteUpdateFile,
+} from "@/lib/projects/updates/files/queries";
+import {
+  uploadUpdateFileAction,
+  deleteUpdateFileAction,
+} from "@/lib/projects/updates/files/actions";
+import { generateSignedUrl } from "@/lib/projects/storage";
+import ProjectRealtimeListener from "@/components/realtime/project-realtime-listener";
+import { InlineCommentEditor } from "@/components/comments/inline-comment-editor";
+import { InlineUpdateEditor } from "@/components/updates/inline-update-editor";
+import { FilePreview } from "@/components/files/file-preview";
 
 export default async function ProjectDetailPage({
   params,
@@ -36,6 +80,11 @@ export default async function ProjectDetailPage({
     "update-created"?: string;
     "update-edited"?: string;
     "update-deleted"?: string;
+    "comment-created"?: string;
+    "comment-edited"?: string;
+    "comment-deleted"?: string;
+    "file-uploaded"?: string;
+    "file-deleted"?: string;
   }>;
 }) {
   const { projectId } = await params;
@@ -97,6 +146,72 @@ export default async function ProjectDetailPage({
     })),
   );
 
+  // Comentarios generales de obra
+  const projectComments = await listProjectComments(projectId);
+  const canAddProjectComment = await canCreateProjectComment(
+    profile,
+    projectId,
+  );
+
+  const projectCommentsWithPermissions = await Promise.all(
+    projectComments.map(async (comment) => ({
+      comment,
+      canEdit: await canEditProjectComment(profile, comment.id),
+      canDelete: await canDeleteProjectComment(profile, comment.id),
+    })),
+  );
+
+  // Comentarios de actualizacion (cargar para cada update)
+  const updatesWithComments = await Promise.all(
+    updatesWithPermissions.map(async ({ update, canEdit, canDelete }) => {
+      const updateComments = await listUpdateComments(update.id);
+      const canAddComment = await canCreateUpdateComment(profile, update.id);
+
+      const commentsWithPermissions = await Promise.all(
+        updateComments.map(async (comment) => ({
+          comment,
+          canEdit: await canEditUpdateComment(profile, comment.id),
+          canDelete: await canDeleteUpdateComment(profile, comment.id),
+        })),
+      );
+
+      const canAddUpdateFile = await canUploadUpdateFile(
+        profile,
+        projectId,
+      );
+
+      const updateFilesWithUrls = await Promise.all(
+        update.files.map(async (file) => ({
+          file,
+          signedUrl: await generateSignedUrl(file.url),
+          canDelete: await canDeleteUpdateFile(profile, file.id),
+        })),
+      );
+
+      return {
+        update,
+        canEdit,
+        canDelete,
+        canAddComment,
+        comments: commentsWithPermissions,
+        canAddUpdateFile,
+        updateFiles: updateFilesWithUrls,
+      };
+    }),
+  );
+
+  // Archivos generales de obra
+  const projectFiles = await listProjectFiles(projectId);
+  const canUploadFile = await canUploadProjectFile(profile, projectId);
+
+  const projectFilesWithUrls = await Promise.all(
+    projectFiles.map(async (file) => ({
+      file,
+      signedUrl: await generateSignedUrl(file.url),
+      canDelete: await canDeleteProjectFile(profile, file.id),
+    })),
+  );
+
   return (
     <main className="flex min-h-screen flex-col items-center p-8">
       <div className="w-full max-w-3xl space-y-8">
@@ -113,7 +228,9 @@ export default async function ProjectDetailPage({
                       ? "bg-red-100 text-red-800"
                       : project.currentStatus === "en_progreso"
                         ? "bg-blue-100 text-blue-800"
-                        : "bg-neutral-100 text-neutral-700"
+                        : project.currentStatus === "en_pausa"
+                          ? "bg-yellow-100 text-yellow-800"
+                          : "bg-neutral-100 text-neutral-700"
                 }`}
               >
                 {project.currentStatus}
@@ -162,6 +279,31 @@ export default async function ProjectDetailPage({
         {sp["update-deleted"] === "true" && (
           <p className="rounded bg-green-50 p-3 text-sm text-green-800">
             Actualizacion eliminada.
+          </p>
+        )}
+        {sp["comment-created"] === "true" && (
+          <p className="rounded bg-green-50 p-3 text-sm text-green-800">
+            Comentario publicado.
+          </p>
+        )}
+        {sp["comment-edited"] === "true" && (
+          <p className="rounded bg-green-50 p-3 text-sm text-green-800">
+            Comentario editado.
+          </p>
+        )}
+        {sp["comment-deleted"] === "true" && (
+          <p className="rounded bg-green-50 p-3 text-sm text-green-800">
+            Comentario eliminado.
+          </p>
+        )}
+        {sp["file-uploaded"] === "true" && (
+          <p className="rounded bg-green-50 p-3 text-sm text-green-800">
+            Archivo subido.
+          </p>
+        )}
+        {sp["file-deleted"] === "true" && (
+          <p className="rounded bg-green-50 p-3 text-sm text-green-800">
+            Archivo eliminado.
           </p>
         )}
 
@@ -354,6 +496,143 @@ export default async function ProjectDetailPage({
           </section>
         )}
 
+        {/* Archivos generales de obra */}
+        <section className="space-y-4 rounded border border-neutral-200 p-4">
+          <h2 className="font-medium">
+            Archivos de obra ({projectFiles.length})
+          </h2>
+
+          {canUploadFile && (
+            <form
+              action={uploadProjectFileAction}
+              className="flex items-end gap-2"
+            >
+              <input type="hidden" name="projectId" value={projectId} />
+              <input
+                type="file"
+                name="file"
+                className="flex-1 rounded border border-neutral-300 px-3 py-1.5 text-sm file:mr-3 file:rounded file:border-0 file:bg-neutral-100 file:px-2 file:py-1 file:text-xs file:font-medium file:text-neutral-700 hover:file:bg-neutral-200"
+                required
+              />
+              <button
+                type="submit"
+                className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 shrink-0"
+              >
+                Subir
+              </button>
+            </form>
+          )}
+
+          {projectFilesWithUrls.length === 0 && !canUploadFile ? null : projectFilesWithUrls.length === 0 ? (
+            <p className="text-sm text-neutral-400">
+              Sin archivos.
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {projectFilesWithUrls.map(({ file, signedUrl, canDelete }) => (
+                <FilePreview
+                  key={file.id}
+                  fileName={file.fileName}
+                  signedUrl={signedUrl}
+                  size={file.size}
+                >
+                  {canDelete && (
+                    <form action={deleteProjectFileAction}>
+                      <input type="hidden" name="fileId" value={file.id} />
+                      <button
+                        type="submit"
+                        className="rounded bg-red-50 px-2 py-0.5 text-xs text-red-700 hover:bg-red-100"
+                      >
+                        Eliminar
+                      </button>
+                    </form>
+                  )}
+                </FilePreview>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Comentarios generales de obra */}
+        <section className="space-y-4 rounded border border-neutral-200 p-4">
+          <h2 className="font-medium">
+            Comentarios generales ({projectComments.length})
+          </h2>
+
+          {canAddProjectComment && (
+            <form action={createProjectCommentAction} className="flex items-start gap-2">
+              <input type="hidden" name="projectId" value={projectId} />
+              <input
+                name="content"
+                type="text"
+                placeholder="Escribe un comentario general..."
+                maxLength={2000}
+                required
+                className="flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
+              />
+              <button
+                type="submit"
+                className="rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-800 shrink-0"
+              >
+                Enviar
+              </button>
+            </form>
+          )}
+
+          {projectCommentsWithPermissions.length === 0 ? (
+            <p className="text-sm text-neutral-400">
+              Sin comentarios generales.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {projectCommentsWithPermissions.map(({ comment, canEdit, canDelete }) => (
+                <div
+                  key={comment.id}
+                  className="rounded bg-neutral-50 p-2 space-y-1"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <InlineCommentEditor
+                        commentId={comment.id}
+                        initialContent={comment.content}
+                        canEdit={canEdit}
+                        editAction={editProjectCommentAction}
+                      />
+                      <p className="text-xs text-neutral-400 mt-1">
+                        {comment.author.name}
+                        {comment.author.role === "super_admin"
+                          ? " (admin)"
+                          : comment.author.role === "ingeniero"
+                            ? " (ingeniero)"
+                            : comment.author.role === "marketing"
+                              ? " (marketing)"
+                              : " (cliente)"}{" "}
+                        · {new Date(comment.createdAt).toLocaleDateString()}
+                        {comment.editedAt && " (editado)"}
+                      </p>
+                    </div>
+                    {(canEdit || canDelete) && (
+                      <div className="flex gap-1 shrink-0">
+                        {canDelete && (
+                          <form action={deleteProjectCommentAction}>
+                            <input type="hidden" name="commentId" value={comment.id} />
+                            <button
+                              type="submit"
+                              className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-700 hover:bg-red-100"
+                            >
+                              Eliminar
+                            </button>
+                          </form>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         {/* Lista de actualizaciones */}
         <section className="space-y-4">
           <h2 className="font-medium">Actualizaciones ({updates.length})</h2>
@@ -363,24 +642,28 @@ export default async function ProjectDetailPage({
             </p>
           ) : (
             <div className="space-y-3">
-              {updatesWithPermissions.map(({ update: update, canEdit, canDelete }) => (
+              {updatesWithComments.map(({ update, canEdit, canDelete, canAddComment, comments, canAddUpdateFile, updateFiles }) => (
                   <div
                     key={update.id}
                     className="rounded border border-neutral-200 p-4 space-y-2"
                   >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="font-medium text-sm">
-                          {update.title}
-                        </h3>
-                        <p className="text-xs text-neutral-400">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <InlineUpdateEditor
+                          updateId={update.id}
+                          initialTitle={update.title}
+                          initialDescription={update.description}
+                          canEdit={canEdit}
+                          editAction={updateProjectUpdateAction}
+                        />
+                        <p className="text-xs text-neutral-400 mt-1">
                           {update.author.name} ·{" "}
                           {new Date(update.createdAt).toLocaleDateString()}
                           {update.editedAt && " (editado)"}
                         </p>
                       </div>
                       {(canEdit || canDelete) && (
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 shrink-0">
                           {canDelete && (
                             <form action={deleteProjectUpdateAction}>
                               <input type="hidden" name="updateId" value={update.id} />
@@ -395,11 +678,6 @@ export default async function ProjectDetailPage({
                         </div>
                       )}
                     </div>
-                    {update.description && (
-                      <p className="text-sm text-neutral-600">
-                        {update.description}
-                      </p>
-                    )}
                     {(update.resultingStatus || update.resultingProgress !== null) && (
                       <div className="flex gap-2 text-xs">
                         {update.resultingStatus && (
@@ -414,16 +692,140 @@ export default async function ProjectDetailPage({
                         )}
                       </div>
                     )}
-                    {update.files.length > 0 && (
-                      <div className="flex gap-2 flex-wrap">
-                        {update.files.map((f) => (
-                          <span
-                            key={f.id}
-                            className="rounded bg-neutral-100 px-2 py-0.5 text-xs"
+                    {updateFiles.length > 0 && (
+                      <div className="space-y-1">
+                        {updateFiles.map(({ file, signedUrl, canDelete: canDeleteFile }) => (
+                          <FilePreview
+                            key={file.id}
+                            fileName={file.fileName}
+                            signedUrl={signedUrl}
+                            size={file.size}
                           >
-                            {f.fileType === "foto" ? "📷" : "🎬"} {f.fileName}
-                          </span>
+                            {canDeleteFile && (
+                              <form action={deleteUpdateFileAction}>
+                                <input
+                                  type="hidden"
+                                  name="fileId"
+                                  value={file.id}
+                                />
+                                <button
+                                  type="submit"
+                                  className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-700 hover:bg-red-100"
+                                >
+                                  Eliminar
+                                </button>
+                              </form>
+                            )}
+                          </FilePreview>
                         ))}
+                      </div>
+                    )}
+
+                    {/* Formulario de subida de archivo en actualizacion */}
+                    {canAddUpdateFile && (
+                      <div className="border-t border-neutral-100 pt-2">
+                        <form
+                          action={uploadUpdateFileAction}
+                          className="flex items-end gap-2"
+                        >
+                          <input
+                            type="hidden"
+                            name="updateId"
+                            value={update.id}
+                          />
+                          <input
+                            type="hidden"
+                            name="projectId"
+                            value={projectId}
+                          />
+                          <input
+                            type="file"
+                            name="file"
+                            className="flex-1 rounded border border-neutral-300 px-2 py-1 text-xs file:mr-2 file:rounded file:border-0 file:bg-neutral-100 file:px-1.5 file:py-0.5 file:text-xs file:font-medium file:text-neutral-700"
+                          />
+                          <button
+                            type="submit"
+                            className="rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-800 shrink-0"
+                          >
+                            Subir
+                          </button>
+                        </form>
+                      </div>
+                    )}
+
+                    {/* Comentarios de actualizacion */}
+                    {comments.length > 0 && (
+                      <div className="border-t border-neutral-100 pt-2 mt-2 space-y-2">
+                        <p className="text-xs font-medium text-neutral-500">
+                          Comentarios ({comments.length})
+                        </p>
+                        {comments.map(({ comment, canEdit: canEditComment, canDelete: canDeleteComment }) => (
+                          <div
+                            key={comment.id}
+                            className="rounded bg-neutral-50 p-2 space-y-1"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <InlineCommentEditor
+                                  commentId={comment.id}
+                                  initialContent={comment.content}
+                                  canEdit={canEditComment}
+                                  editAction={editUpdateCommentAction}
+                                />
+                                <p className="text-xs text-neutral-400 mt-1">
+                                  {comment.author.name}
+                                  {comment.author.role === "super_admin"
+                                    ? " (admin)"
+                                    : comment.author.role === "ingeniero"
+                                      ? " (ingeniero)"
+                                      : comment.author.role === "marketing"
+                                        ? " (marketing)"
+                                        : " (cliente)"}{" "}
+                                  · {new Date(comment.createdAt).toLocaleDateString()}
+                                  {comment.editedAt && " (editado)"}
+                                </p>
+                              </div>
+                              {(canEditComment || canDeleteComment) && (
+                                <div className="flex gap-1 shrink-0">
+                                  {canDeleteComment && (
+                                    <form action={deleteUpdateCommentAction}>
+                                      <input type="hidden" name="commentId" value={comment.id} />
+                                      <button
+                                        type="submit"
+                                        className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-700 hover:bg-red-100"
+                                      >
+                                        Eliminar
+                                      </button>
+                                    </form>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Formulario de comentario en actualizacion */}
+                    {canAddComment && (
+                      <div className="border-t border-neutral-100 pt-2 mt-2">
+                        <form action={createUpdateCommentAction} className="flex items-start gap-2">
+                          <input type="hidden" name="updateId" value={update.id} />
+                          <input
+                            name="content"
+                            type="text"
+                            placeholder="Escribe un comentario..."
+                            maxLength={2000}
+                            required
+                            className="flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
+                          />
+                          <button
+                            type="submit"
+                            className="rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-800 shrink-0"
+                          >
+                            Enviar
+                          </button>
+                        </form>
                       </div>
                     )}
                   </div>
@@ -432,6 +834,10 @@ export default async function ProjectDetailPage({
           )}
         </section>
       </div>
+      <ProjectRealtimeListener
+        projectIds={[projectId]}
+        updateIds={updates.map((u) => u.id)}
+      />
     </main>
   );
 }

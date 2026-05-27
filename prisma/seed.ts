@@ -224,3 +224,5 @@ seed().catch((err) => {
   console.error("Seed falló:", err);
   process.exit(1);
 });
+
+//qbin.demo.myc@local.com

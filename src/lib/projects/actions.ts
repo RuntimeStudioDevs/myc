@@ -55,6 +55,10 @@ export async function createProjectAction(formData: FormData) {
     return redirect("/dashboard/projects?error=invalid-engineer-role");
   }
 
+  if (startDate && estimatedEndDate && new Date(estimatedEndDate) < new Date(startDate)) {
+    return redirect("/dashboard/projects?error=invalid-dates");
+  }
+
   // Transaccion: obra + asignacion + historial inicial
   await prisma.$transaction(async (tx) => {
     const project = await tx.project.create({
@@ -149,6 +153,13 @@ export async function updateProjectAction(formData: FormData) {
   // Regla: progreso 100 → completado
   if (progress === 100) {
     newStatus = "completado";
+  }
+
+  // Validar fechas: end >= start
+  const resolvedStartDate = startDateStr ? new Date(startDateStr) : project.startDate;
+  const resolvedEndDate = estimatedEndDateStr ? new Date(estimatedEndDateStr) : project.estimatedEndDate;
+  if (resolvedStartDate && resolvedEndDate && resolvedEndDate < resolvedStartDate) {
+    return redirect("/dashboard/projects?error=invalid-dates");
   }
 
   // Regla: completado o cancelado → archivar

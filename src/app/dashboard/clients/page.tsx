@@ -26,7 +26,7 @@ export default async function ClientsPage({
   const canWrite =
     profile.role === "super_admin" || profile.role === "ingeniero";
 
-  const clients = await listClients();
+  const clients = await listClients(profile.role === "marketing");
   const params = await searchParams;
 
   return (
@@ -101,12 +101,14 @@ export default async function ClientsPage({
                 name="phone"
                 type="text"
                 placeholder="Telefono (opcional)"
+                maxLength={10}
                 className="rounded border border-neutral-300 px-3 py-1.5 text-sm"
               />
               <input
                 name="document"
                 type="text"
                 placeholder="Documento (opcional)"
+                maxLength={10}
                 className="rounded border border-neutral-300 px-3 py-1.5 text-sm"
               />
               <input
@@ -211,6 +213,21 @@ export default async function ClientsPage({
                                 type="hidden"
                                 name="clientId"
                                 value={client.id}
+                              />
+                              <input
+                                type="hidden"
+                                name="phone"
+                                value={client.phone ?? ""}
+                              />
+                              <input
+                                type="hidden"
+                                name="document"
+                                value={client.document ?? ""}
+                              />
+                              <input
+                                type="hidden"
+                                name="address"
+                                value={client.address ?? ""}
                               />
                               <input
                                 name="displayName"

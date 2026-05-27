@@ -6,6 +6,9 @@ import { requireAnyRole } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { prisma } from "@/lib/prisma";
 
+const MAX_PHONE_LENGTH = 10;
+const MAX_DOCUMENT_LENGTH = 10;
+
 export async function createClientAction(formData: FormData) {
   const currentProfile = await requireAnyRole(["super_admin", "ingeniero"]);
 
@@ -24,6 +27,14 @@ export async function createClientAction(formData: FormData) {
 
   if (clientType !== "persona" && clientType !== "empresa") {
     return redirect("/dashboard/clients?error=invalid-client-type");
+  }
+
+  if (phone && phone.length > MAX_PHONE_LENGTH) {
+    return redirect("/dashboard/clients?error=phone-too-long");
+  }
+
+  if (document && document.length > MAX_DOCUMENT_LENGTH) {
+    return redirect("/dashboard/clients?error=document-too-long");
   }
 
   // Crear usuario en Supabase Auth
@@ -88,6 +99,14 @@ export async function updateClientAction(formData: FormData) {
 
   if (clientType !== "persona" && clientType !== "empresa") {
     return redirect("/dashboard/clients?error=invalid-client-type");
+  }
+
+  if (phone && phone.length > MAX_PHONE_LENGTH) {
+    return redirect("/dashboard/clients?error=phone-too-long");
+  }
+
+  if (document && document.length > MAX_DOCUMENT_LENGTH) {
+    return redirect("/dashboard/clients?error=document-too-long");
   }
 
   const client = await prisma.client.findUnique({

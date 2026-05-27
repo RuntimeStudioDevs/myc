@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getCurrentAuthUser } from "@/lib/auth/session";
 import { signInAction } from "@/lib/auth/actions";
 
@@ -75,9 +76,9 @@ export default async function LoginPage({
 
         <p className="text-center text-sm text-neutral-500">
           No tienes cuenta?{" "}
-          <a href="/register" className="text-neutral-900 underline">
+          <Link href="/register" className="text-neutral-900 underline">
             Registrate
-          </a>
+          </Link>
         </p>
       </div>
     </main>

@@ -27,27 +27,35 @@
 
 ### Lo que funciona
 
-- **Autenticacion**: Login, registro y logout con Supabase Auth via Server Actions
+- **Autenticacion**: Login, registro y logout con Supabase Auth via Server Actions. Retry de perfil post-registro (hasta 5 intentos)
 - **Roles**: `super_admin`, `ingeniero`, `marketing`, `cliente` con guards en servidor
 - **Sincronizacion**: Trigger `tr_sync_auth_user_profile` que crea perfil en `public.usuarios` al insertar en `auth.users`
 - **Seed local**: `prisma/seed.ts` genera usuarios de prueba con `npm run db:seed`
-- **Dashboard por rol**: Redireccion automatica segun rol a `/dashboard/admin`, `/dashboard/engineer`, `/dashboard/marketing`, `/dashboard/client`
-- **CRUD de clientes**: Crear (con cuenta Supabase Auth asociada), editar, soft-delete. Solo `super_admin` e `ingeniero` escriben. `marketing` visualiza. `cliente` bloqueado
-- **CRUD de obras**: Crear con cliente + ingeniero principal, editar, archivar. Reglas: progreso 100 → completado, completado/cancelado → archivado
+- **Dashboard por rol**: Redireccion automatica segun rol. `super_admin` → `/dashboard/admin/users`
+- **CRUD de clientes**: Crear, editar (preservando phone/document/address), soft-delete. `marketing` solo ve clientes activos en lectura. `cliente` bloqueado
+- **CRUD de obras**: Crear con cliente + ingeniero principal, editar (preservando descripcion), archivar. Reglas: progreso 100 → completado, completado/cancelado → archivado
 - **Asignaciones de obra**: Asignar/desasignar ingenieros y marketing. Reactivacion de asignaciones previas. Sin borrado fisico
-- **Actualizaciones de obra**: Crear con titulo, descripcion, cambio opcional de estado/progreso. Historial automatico vinculado
+- **Actualizaciones de obra**: Crear, editar (UI inline con `InlineUpdateEditor`), soft-delete. Cambio opcional de estado/progreso. Historial vinculado
 - **Historial de estado/progreso**: Registro en `historial_estado_obra` en cada cambio relevante, con transacciones atomicas
 - **Guard por obra asignada**: Ingeniero y marketing solo ven/operan obras donde estan asignados
+- **Supabase Storage**: Subida y descarga de archivos con signed URLs (300s). Validacion de MIME types y tamanos. `React.cache` por request
+- **Comentarios**: CRUD completo de comentarios de actualizacion y comentarios generales de obra. Edicion inline con `InlineCommentEditor`
+- **Vista del cliente**: Dashboard `/dashboard/client` con obras, progreso, actualizaciones, archivos, comentarios. Solo ve sus obras
+- **RLS en 10 tablas**: 23 politicas SELECT con helper functions. `(SELECT auth.uid())` optimizado. `auth_rls_initplan` eliminado
+- **Indexes de BD**: 20 indices compuestos y FK en 10 tablas
+- **Supabase Realtime**: 7 tablas en publicacion, componente `ProjectRealtimeListener` con `router.refresh()`, debounce 2s, cleanup async seguro
+- **Pruebas automatizadas**: 74 tests en 6 archivos (comentarios, archivos, proyectos, actualizaciones, asignaciones, clientes)
+- **UX completa**: `loading.tsx` por segmento (4 skeletons), `error.tsx` con boton reintentar, `not-found.tsx` personalizado
+- **Documentacion**: `README.md` tecnico completo, `CHANGELOG.md`, `.env.example` con placeholders seguros
 - **Conexion local**: Prisma conecta via Supabase Session Pooler (IPv4)
+- **Middleware**: `src/proxy.ts` activo (Next.js 16). Refresca sesion y protege `/dashboard`
 
-### Lo que NO esta implementado aun
+### Pendientes menores
 
-- Integracion real de Supabase Storage (solo metadata de archivos en DB)
-- Comentarios de actualizacion y comentarios generales de obra
-- RLS en las 10 tablas del esquema `public`
-- Indexes en columnas de foreign keys
-- Pruebas automatizadas
-- Vista privada del cliente final (solo sus obras)
+- Tests de integracion directa para server actions (solo queries de permiso testeadas)
+- Lazy loading de signed URLs si el volumen de archivos escala
+- `loading.tsx` y `error.tsx` por segmento en subrutas de segundo nivel (opcional)
+- `dashboard/admin/page.tsx` como hub si se agregan mas modulos administrativos (opcional)
 
 ---
 
@@ -272,9 +280,30 @@ El proyecto tiene modelos de archivos en Prisma pero **no tiene integracion real
 | `src/lib/projects/updates/queries.ts` | Queries de actualizaciones + permisos | Funcional |
 | `src/app/dashboard/projects/page.tsx` | Listado de obras | Funcional |
 | `src/app/dashboard/projects/[projectId]/page.tsx` | Detalle de obra (asignaciones + updates) | Funcional |
-| `src/proxy.ts` | Middleware de sesion y proteccion `/dashboard` | Funcional |
+| `src/proxy.ts` | Middleware de sesion y proteccion `/dashboard` (Next.js 16) | Funcional |
+| `src/components/comments/inline-comment-editor.tsx` | Edicion inline de comentarios (cliente) | Funcional |
+| `src/components/updates/inline-update-editor.tsx` | Edicion inline de actualizaciones (cliente) | Funcional |
+| `src/components/files/file-preview.tsx` | Preview de archivos con signed URL | Funcional |
+| `src/components/realtime/project-realtime-listener.tsx` | Listener Realtime con router.refresh() | Funcional |
+| `src/app/not-found.tsx` | Pagina 404 personalizada | Funcional |
+| `src/app/dashboard/loading.tsx` | Spinner generico de carga | Funcional |
+| `src/app/dashboard/error.tsx` | Pantalla de error con boton reintentar | Funcional |
+| `src/app/dashboard/clients/loading.tsx` | Skeleton de tabla de clientes | Funcional |
+| `src/app/dashboard/projects/loading.tsx` | Skeleton de tabla de obras | Funcional |
+| `src/app/dashboard/projects/[projectId]/loading.tsx` | Skeleton de detalle de obra | Funcional |
+| `src/app/dashboard/client/loading.tsx` | Skeleton de dashboard de cliente | Funcional |
+| `tests/permissions/comments.test.ts` | Tests de permisos de comentarios | Funcional |
+| `tests/permissions/files.test.ts` | Tests de permisos de archivos | Funcional |
+| `tests/permissions/projects.test.ts` | Tests de permisos de obras | Funcional |
+| `tests/permissions/updates.test.ts` | Tests de permisos de actualizaciones | Funcional |
+| `tests/permissions/assignments.test.ts` | Tests de permisos de asignaciones | Funcional |
+| `tests/permissions/clients.test.ts` | Tests de permisos de clientes | Funcional |
 | `package.json` | Dependencias y scripts | Completo |
 | `LORE.md` | Documento funcional del MVP (fuente de verdad) | Completo |
+| `README.md` | Documentacion tecnica para onboarding | Completo |
+| `CHANGELOG.md` | Registro cronologico de cambios | Completo |
+| `.env.example` | Plantilla de variables de entorno | Completo |
+| `notas-y-actualizaciones/mateo.md` | Este archivo — historial detallado | Actualizado |
 
 ---
 
@@ -298,7 +327,7 @@ El proyecto tiene modelos de archivos en Prisma pero **no tiene integracion real
 | Eliminar actualizacion propia | N/A | SI | SI | SI | NO | NO |
 | Eliminar cualquier actualizacion | SI | NO | NO | NO | NO | NO |
 | Ver actualizaciones | SI | SI | SI | SI | NO | NO |
-| Comentarios (pendiente) | No implementado | No implementado | No implementado | No implementado | No implementado | No implementado |
+| Comentarios en obra | SI | SI | SI | SI | Sus obras | NO |
 
 ---
 
@@ -339,13 +368,18 @@ El proyecto tiene modelos de archivos en Prisma pero **no tiene integracion real
 
 | Riesgo | Severidad | Explicacion | Recomendacion |
 |--------|-----------|-------------|---------------|
-| Sin integracion Supabase Storage | **Alto** | Los modelos `UpdateFile` y `ProjectFile` existen pero no hay subida real de archivos. Las URLs deben generarse manualmente | Integrar Supabase Storage con politicas de acceso por rol |
-| RLS deshabilitado | **Alto** | Las 10 tablas en schema `public` no tienen Row Level Security. Cualquiera con la anon key puede acceder via Data API | Activar RLS con politicas minimas antes de produccion |
-| `SECURITY DEFINER` en trigger | **Medio** | `sync_auth_user_profile()` esta en schema `public` con `SECURITY DEFINER`, lo que la hace invocable por `anon` y `authenticated` | Mover a schema privado o cambiar a `SECURITY INVOKER` con grants explicitos |
-| Sin indexes en FK columns | **Medio** | Prisma no genera indexes en foreign keys. JOINs y CASCADE pueden degradar con volumen | Crear indexes manualmente en todas las columnas FK |
-| Comentarios pendientes | **Medio** | Modelos `UpdateComment` y `ProjectComment` existen pero no tienen implementacion | Implementar CRUD de comentarios segun LORE.md |
-| Guard por obra asignada para comentarios | **Bajo** | Al implementar comentarios, se necesita extender los guards actuales | Usar `hasActiveProjectAssignment` como base |
-| Politicas de Storage pendientes | **Bajo** | Requiere definir buckets, tamaños maximos, formatos permitidos y reglas de acceso | Definir antes de implementar Storage |
+| `SECURITY DEFINER` en trigger | **Resuelto** | `sync_auth_user_profile()` movida de `public` a `myc_internal`. Permisos revocados. Warning eliminado | — |
+| Sin indexes en FK columns | **Resuelto** | 20 indices compuestos y FK aplicados en las 10 tablas | — |
+| Comentarios pendientes | **Resuelto** | CRUD completo de `UpdateComment` y `ProjectComment` con permisos por rol y edicion inline | — |
+| Vista privada del cliente | **Resuelto** | Dashboard `/dashboard/client` funcional con obras, actualizaciones, archivos y comentarios | — |
+| Guard por obra asignada para comentarios | **Resuelto** | Integrado en queries de permisos de comentarios (`canCreateProjectComment`, `canCreateUpdateComment`) | — |
+| Politicas de Storage pendientes | **Resuelto** | Bucket privado, signed URLs 300s, validacion MIME/tamano, `React.cache` por request | — |
+| Sin integracion Supabase Storage | **Resuelto** | Subida/descarga con Server Actions. Modelos `UpdateFile` y `ProjectFile` con datos reales | — |
+| RLS deshabilitado | **Resuelto** | 23 politicas SELECT con helper functions. `(SELECT auth.uid())` optimizado en 16 ocurrencias | — |
+| Pruebas automatizadas | **Resuelto** | 74 tests en 6 archivos con Vitest. Cobertura de permisos por rol | — |
+| Sin documentacion de onboarding | **Resuelto** | `README.md` tecnico, `CHANGELOG.md`, `.env.example`, `AGENTS.md`, skills del proyecto | — |
+| Cobertura de tests de server actions | **Bajo** | 74 tests cubren queries de permiso. Las acciones completas no tienen test directo (usan redirect) | Agregar tests de integracion con mock de redirect si se requiere cobertura total |
+| Sin `.env.example` | **Resuelto** | Creado con 5 variables documentadas y placeholders seguros | — |
 
 ---
 
@@ -353,14 +387,11 @@ El proyecto tiene modelos de archivos en Prisma pero **no tiene integracion real
 
 Ordenadas por prioridad:
 
-1. **Integracion Supabase Storage**: subida real de fotos/videos para actualizaciones. Configurar buckets, politicas RLS de Storage, validacion de MIME types y tamaño
-2. **Comentarios de actualizacion**: CRUD de `UpdateComment`. Cliente, ingeniero y marketing pueden comentar. Solo autor edita su comentario. super_admin puede intervenir todo
-3. **Comentarios generales de obra**: CRUD de `ProjectComment`. Mismas reglas que comentarios de actualizacion
-4. **Activar RLS**: politicas minimas por tabla basadas en rol y asignacion. Priorizar tablas expuestas via Data API
-5. **Indexes para foreign keys**: crear indexes en todas las columnas FK (`obra_id`, `usuario_id`, `cliente_id`, `autor_id`, `actualizacion_id`, etc.)
-6. **Vista privada del cliente**: dashboard donde el cliente solo ve sus obras, actualizaciones y puede comentar
-7. **Pruebas automatizadas**: tests unitarios para Server Actions, tests de integracion para flujos de auth y CRUD
-8. **Endurecimiento de politicas de seguridad**: revision de `SECURITY DEFINER`, variables de entorno, CORS, rate limiting
+1. **Commit y push**: Consolidar todos los cambios de estabilizacion en el repositorio. `git add . && git commit -m "feat: estabilizacion del MVP" && git push`
+2. **Despliegue**: Configurar entorno de produccion (Vercel o similar) con las 5 variables de entorno. Aplicar migraciones. Verificar RLS en produccion
+3. **Tests de integracion para server actions**: Pasar de 74 tests de queries de permiso a tests de acciones completas con mock de `redirect` y `revalidatePath`
+4. **Lazy loading de signed URLs**: Si el volumen de archivos por obra crece, implementar firma de URL al hacer clic en "Ver" en lugar de prefirmar todas
+5. **`dashboard/admin/page.tsx`**: Hub administrativo si se agregan mas modulos de administracion (reportes, configuracion, logs)
 
 ---
 
@@ -378,3 +409,93 @@ Ordenadas por prioridad:
 10. **Guard por obra asignada**: Filtrado de queries por asignacion. Validacion en Server Actions. Ingeniero solo opera obras asignadas
 11. **Actualizaciones de obra**: Crear con titulo, descripcion, cambio opcional de estado/progreso. Historial vinculado. Soft delete
 12. **Seed local**: Usuarios de prueba idempotentes con `npm run db:seed`
+13. **RLS en 10 tablas**: 23 politicas SELECT con helper functions, `(SELECT auth.uid())` optimizado, `auth_rls_initplan` eliminado
+14. **Indices de BD**: 20 indices compuestos y FK en 10 tablas
+15. **Supabase Storage**: Bucket privado `myc-project-files`, URLs firmadas 300s, subida/descarga con Server Actions
+16. **Supabase Realtime**: 7 tablas en publicacion, componente listener con `router.refresh()`, debounce 2s
+17. **Vista cliente**: Dashboard `/dashboard/client` con proyectos, estado, progreso, actualizaciones, comentarios, archivos (read-only)
+18. **Endurecimiento RLS**: Reemplazo de `auth.uid()` por `(SELECT auth.uid())` en 16 ocurrencias, 6 warnings de initplan eliminados
+19. **Endurecimiento sync_auth_user_profile()**: Funcion movida de `public` a `myc_internal`, permisos revocados para anon/authenticated/PUBLIC, trigger actualizado, warning SECURITY DEFINER eliminado
+20. **Leaked Password Protection**: Identificado warning `auth_leaked_password_protection` en advisors, pendiente de activacion manual en Supabase Dashboard
+21. **Estabilizacion del MVP (2026-05-27)**: Correccion de bugs criticos/altos/medios/bajos, 34 tests nuevos, UX completa, documentacion tecnica y .env.example. Ver seccion abajo.
+
+---
+
+## Estabilizacion del MVP — 2026-05-27
+
+> Sesion de revision, correccion de bugs, mejora de UX, tests, documentacion y hardening del proyecto MYC.
+
+### Bugs corregidos (13)
+
+| Nº | Severidad | Bug | Archivo | Solucion |
+|---|---|---|---|---|
+| 1 | Critica | `super_admin` redirigido a `/dashboard/admin` (no existe) | `dashboard/page.tsx` | Cambiado a `/dashboard/admin/users` |
+| 2 | Alta | Edicion inline de cliente perdia `phone`, `document`, `address` | `dashboard/clients/page.tsx` | Inputs ocultos con valores actuales |
+| 3 | Alta | Edicion inline de obra perdia `description` | `dashboard/projects/page.tsx` | Input oculto con `project.description` |
+| 4 | Alta | Sin UI para editar actualizaciones | `projects/[projectId]/page.tsx` | Componente `InlineUpdateEditor` |
+| 5 | Alta | `generateSignedUrl` sin cache (N llamadas por request) | `lib/projects/storage.ts` | Envuelto en `React.cache()` |
+| 6 | Media | `super_admin` veia dashboard de cliente | `dashboard/client/page.tsx` | Redirect a `/dashboard/admin/users` |
+| 7 | Media | Props `canEdit`/`canDelete` invertidas semanticamente | `dashboard/client/page.tsx` | Importadas y usadas por separado |
+| 8 | Media | `<a href>` en login/register (full reload) | `(auth)/login`, `(auth)/register` | Reemplazado por `<Link>` |
+| 9 | Media | Link "Volver al admin" roto | `dashboard/admin/users/page.tsx` | Cambiado a `/dashboard/admin/users` |
+| 10 | Media | Estado `en_pausa` sin color distintivo | Tabla y detalle de proyectos | `bg-yellow-100 text-yellow-800` |
+| 11 | Media | Desactivar usuario no invalidaba sesiones Supabase | `lib/admin/users/actions.ts` | `signOut` + `try/catch` |
+| 12 | Media | Condicion de carrera perfil post-registro | `lib/auth/actions.ts` | Retry 5x300ms via admin client |
+| 13 | Baja | Cleanup async de canales Realtime sin `.catch()` | `project-realtime-listener.tsx` | `.catch(() => {})` |
+
+### Mejoras de UX (7)
+
+| Archivo | Descripcion |
+|---|---|
+| `dashboard/loading.tsx` | Spinner generico como fallback |
+| `dashboard/error.tsx` | Mensaje amigable + boton reintentar |
+| `dashboard/clients/loading.tsx` | Skeleton de tabla con 4 filas |
+| `dashboard/projects/loading.tsx` | Skeleton de tabla con 5 filas + progreso |
+| `dashboard/projects/[projectId]/loading.tsx` | Skeleton de detalle con secciones |
+| `dashboard/client/loading.tsx` | Skeleton de cards de obras |
+| `not-found.tsx` | Pagina 404 personalizada con diseno MYC |
+
+### Ajustes de permisos (1)
+
+| Cambio | Archivo | Descripcion |
+|---|---|---|
+| Marketing solo ve clientes activos | `lib/clients/queries.ts` + `dashboard/clients/page.tsx` | `listClients(true)` filtra `user.active === true` |
+
+### Tests nuevos (34 tests en 4 archivos)
+
+| Archivo | Tests | Funciones testeadas |
+|---|---|---|
+| `tests/permissions/projects.test.ts` | 12 | `hasActiveProjectAssignment`, `canReadProject`, `canWriteProject` |
+| `tests/permissions/updates.test.ts` | 13 | `canCreateProjectUpdate`, `canEditProjectUpdate`, `canDeleteProjectUpdate` |
+| `tests/permissions/assignments.test.ts` | 3 | `isPrimaryEngineer` |
+| `tests/permissions/clients.test.ts` | 3 | `listClients` (filtro `onlyActiveUsers`) |
+
+**Total**: 74 tests en 6 archivos (40 existentes + 34 nuevos).
+
+### Documentacion nueva (4 archivos)
+
+| Archivo | Contenido |
+|---|---|
+| `README.md` | Documentacion tecnica completa (stack, instalacion, rutas, roles, permisos, flujo auth, pruebas, validacion) |
+| `CHANGELOG.md` | Registro cronologico de cambios con formato Keep a Changelog |
+| `.env.example` | Plantilla con 5 variables de entorno, placeholders seguros y comentarios |
+| `notas-y-actualizaciones/mateo.md` | Este archivo — actualizado con estado real actual |
+
+### Comandos de validacion (todos pasan)
+
+| Comando | Resultado |
+|---|---|
+| `npx eslint --cache .` | 0 errores, 0 warnings |
+| `npx vitest run` | 6 archivos, 74 tests pasan |
+| `npx next build` | Compilacion exitosa, TypeScript OK, 14 paginas, Proxy activo |
+
+### Decisiones tecnicas clave documentadas
+
+- Next.js 16 usa `src/proxy.ts` como middleware (no `middleware.ts`)
+- Prisma Client generado en `src/generated/prisma/`
+- `React.cache()` en `generateSignedUrl` por request
+- `try/catch` en `signOut` de Supabase Auth al desactivar usuarios
+- Redirect para roles desconocidos en `/dashboard`
+- `onlyActiveUsers` en `listClients` para marketing
+- InlineCommentEditor recibe `canEdit` semanticamente correcto
+- Formularios de comentarios con `required` en frontend

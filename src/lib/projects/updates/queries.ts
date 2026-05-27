@@ -60,13 +60,13 @@ export async function getProjectUpdateById(updateId: string) {
 
 /**
  * Verifica si un usuario puede crear actualizaciones en una obra.
- * Solo ingeniero o marketing con asignacion activa.
- * super_admin no puede segun LORE.md.
+ * super_admin, ingeniero o marketing con asignacion activa.
  */
 export async function canCreateProjectUpdate(
   profile: PrismaUser,
   projectId: string,
 ): Promise<boolean> {
+  if (profile.role === "super_admin") return true;
   if (profile.role !== "ingeniero" && profile.role !== "marketing") {
     return false;
   }

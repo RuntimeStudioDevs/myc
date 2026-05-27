@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { notFound } from "next/navigation";
-import { requireAnyRole, requireSuperAdmin } from "@/lib/auth/guards";
+import { requireSuperAdmin } from "@/lib/auth/guards";
 import { getCurrentUserProfile } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { isPrimaryEngineer } from "@/lib/projects/assignments/queries";
