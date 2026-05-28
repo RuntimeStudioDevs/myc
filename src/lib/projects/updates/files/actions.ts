@@ -17,6 +17,7 @@ import {
   classifyUpdateFileType,
   isValidMimeType,
   isValidFileSize,
+  isValidExtension,
 } from "@/lib/projects/storage";
 
 export async function uploadUpdateFileAction(formData: FormData) {
@@ -35,6 +36,10 @@ export async function uploadUpdateFileAction(formData: FormData) {
   }
 
   if (!isValidMimeType(file.type, ALLOWED_UPDATE_FILE_TYPES)) {
+    return redirect("/dashboard/projects?error=invalid-file-type");
+  }
+
+  if (!isValidExtension(file.name, file.type)) {
     return redirect("/dashboard/projects?error=invalid-file-type");
   }
 
@@ -75,7 +80,7 @@ export async function uploadUpdateFileAction(formData: FormData) {
     .from(STORAGE_BUCKET)
     .upload(filePath, buffer, {
       contentType: file.type,
-      upsert: true,
+      upsert: false,
     });
 
   if (uploadError) {
@@ -90,6 +95,7 @@ export async function uploadUpdateFileAction(formData: FormData) {
       url: filePath,
       fileName: file.name || "archivo",
       size: file.size,
+      uploadedBy: profile.id,
     },
   });
 
@@ -138,9 +144,10 @@ export async function deleteUpdateFileAction(formData: FormData) {
     return redirect(`${fallback}?error=not-authorized`);
   }
 
-  // Delete fisico de UpdateFile (el modelo no tiene deletedAt)
-  await prisma.updateFile.delete({
+  // Soft delete en BD
+  await prisma.updateFile.update({
     where: { id: fileId },
+    data: { deletedAt: new Date() },
   });
 
   // Intentar eliminar de Storage

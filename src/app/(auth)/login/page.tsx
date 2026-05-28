@@ -75,6 +75,10 @@ export default async function LoginPage({
         </form>
 
         <p className="text-center text-sm text-neutral-500">
+          <Link href="/" className="text-neutral-400 underline hover:text-neutral-700">
+            Inicio
+          </Link>
+          {" · "}
           No tienes cuenta?{" "}
           <Link href="/register" className="text-neutral-900 underline">
             Registrate

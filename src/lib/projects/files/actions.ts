@@ -17,6 +17,7 @@ import {
   classifyProjectFileType,
   isValidMimeType,
   isValidFileSize,
+  isValidExtension,
 } from "@/lib/projects/storage";
 
 export async function uploadProjectFileAction(formData: FormData) {
@@ -35,6 +36,11 @@ export async function uploadProjectFileAction(formData: FormData) {
   }
 
   if (!isValidMimeType(file.type, ALLOWED_PROJECT_FILE_TYPES)) {
+    const fallback = returnTo ?? `/dashboard/projects/${projectId}`;
+    return redirect(`${fallback}?error=invalid-file-type`);
+  }
+
+  if (!isValidExtension(file.name, file.type)) {
     const fallback = returnTo ?? `/dashboard/projects/${projectId}`;
     return redirect(`${fallback}?error=invalid-file-type`);
   }
@@ -68,7 +74,7 @@ export async function uploadProjectFileAction(formData: FormData) {
     .from(STORAGE_BUCKET)
     .upload(filePath, buffer, {
       contentType: file.type,
-      upsert: true,
+      upsert: false,
     });
 
   if (uploadError) {

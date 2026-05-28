@@ -7,6 +7,7 @@ export async function listUpdateFiles(updateId: string) {
   return prisma.updateFile.findMany({
     where: {
       updateId,
+      deletedAt: null,
     },
     orderBy: {
       createdAt: "asc",
@@ -45,6 +46,8 @@ export async function canDeleteUpdateFile(
     where: { id: fileId },
     select: {
       id: true,
+      uploadedBy: true,
+      deletedAt: true,
       update: {
         select: {
           authorId: true,
@@ -54,7 +57,14 @@ export async function canDeleteUpdateFile(
     },
   });
 
-  if (!file || file.update.deletedAt) return false;
+  if (!file || file.deletedAt || file.update.deletedAt) return false;
   if (profile.role === "super_admin") return true;
-  return file.update.authorId === profile.id;
+
+  // Uploader del archivo puede eliminar
+  if (file.uploadedBy === profile.id) return true;
+
+  // Autor de la actualizacion puede eliminar
+  if (file.update.authorId === profile.id) return true;
+
+  return false;
 }

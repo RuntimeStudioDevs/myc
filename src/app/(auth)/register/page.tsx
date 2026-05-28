@@ -82,6 +82,10 @@ export default async function RegisterPage({
         </form>
 
         <p className="text-center text-sm text-neutral-500">
+          <Link href="/" className="text-neutral-400 underline hover:text-neutral-700">
+            Inicio
+          </Link>
+          {" · "}
           Ya tienes cuenta?{" "}
           <Link href="/login" className="text-neutral-900 underline">
             Inicia sesion

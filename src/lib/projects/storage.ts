@@ -10,7 +10,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const STORAGE_BUCKET = "myc-project-files";
 
 // Tamaños maximos en bytes
-export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+export const MAX_FILE_SIZE = 10 * 1000 * 1000; // 10 MB (10 000 KB)
 export const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB
 
 // Tipos MIME permitidos
@@ -26,17 +26,21 @@ export const ALLOWED_DOCUMENT_TYPES = [
 
 export const ALLOWED_VIDEO_TYPES = [
   "video/mp4",
+  "video/webm",
+  "video/quicktime",
 ] as const;
 
+// Archivos de actualizacion: imagenes, videos, PDF
 export const ALLOWED_UPDATE_FILE_TYPES = [
   ...ALLOWED_IMAGE_TYPES,
   ...ALLOWED_VIDEO_TYPES,
+  ...ALLOWED_DOCUMENT_TYPES,
 ] as const;
 
+// Archivos de obra: imagenes, PDF (sin video)
 export const ALLOWED_PROJECT_FILE_TYPES = [
   ...ALLOWED_IMAGE_TYPES,
   ...ALLOWED_DOCUMENT_TYPES,
-  ...ALLOWED_VIDEO_TYPES,
 ] as const;
 
 // Extensiones permitidas por tipo MIME
@@ -46,12 +50,14 @@ const MIME_EXTENSIONS: Record<string, string[]> = {
   "image/webp": [".webp"],
   "application/pdf": [".pdf"],
   "video/mp4": [".mp4"],
+  "video/webm": [".webm"],
+  "video/quicktime": [".mov"],
 };
 
 // Genera rutas de storage
 export function buildProjectFilePath(projectId: string, safeFilename: string): string {
-  const timestamp = Date.now();
-  return `projects/${projectId}/files/${timestamp}-${safeFilename}`;
+  const uuid = crypto.randomUUID();
+  return `projects/${projectId}/documents/${uuid}-${safeFilename}`;
 }
 
 export function buildUpdateFilePath(
@@ -59,8 +65,8 @@ export function buildUpdateFilePath(
   updateId: string,
   safeFilename: string,
 ): string {
-  const timestamp = Date.now();
-  return `projects/${projectId}/updates/${updateId}/${timestamp}-${safeFilename}`;
+  const uuid = crypto.randomUUID();
+  return `projects/${projectId}/updates/${updateId}/evidence/${uuid}-${safeFilename}`;
 }
 
 // Sanitizar nombre de archivo
@@ -82,10 +88,15 @@ export function getExtensionFromMime(mimeType: string): string {
   return "";
 }
 
-// Determinar el tipo de archivo para UpdateFile (foto o video)
-export function classifyUpdateFileType(mimeType: string): "foto" | "video" {
+// Determinar el tipo de archivo para UpdateFile
+export function classifyUpdateFileType(
+  mimeType: string,
+): "foto" | "video" | "documento" {
   if ((ALLOWED_IMAGE_TYPES as readonly string[]).includes(mimeType)) {
     return "foto";
+  }
+  if (mimeType === "application/pdf") {
+    return "documento";
   }
   return "video";
 }

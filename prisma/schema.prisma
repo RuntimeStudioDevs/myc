@@ -68,6 +68,7 @@ enum AssignmentRole {
 enum UpdateFileType {
   foto
   video
+  documento
 
   @@schema("public")
   @@map("tipo_archivo_actualizacion")
@@ -114,6 +115,7 @@ model User {
   assignments        ProjectAssignment[]
   updates            ProjectUpdate[]
   uploadedFiles      ProjectFile[]
+  updateFiles        UpdateFile[]          @relation("UpdateFileUploader")
   statusHistories    ProjectStatusHistory[]
   updateComments     UpdateComment[]
   projectComments    ProjectComment[]
@@ -235,6 +237,9 @@ model UpdateFile {
   url        String         @map("url")
   fileName   String         @map("nombre_archivo")
   size       Int            @map("tamano")
+  uploadedBy String?        @map("subido_por") @db.Uuid
+  uploader   User?          @relation("UpdateFileUploader", fields: [uploadedBy], references: [id])
+  deletedAt  DateTime?      @map("eliminado_en")
   createdAt  DateTime       @default(now()) @map("creado_en")
 
   @@schema("public")
