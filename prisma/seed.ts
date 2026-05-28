@@ -39,7 +39,7 @@ interface SeedUser {
 const SEED_USERS: SeedUser[] = [
   {
     email: "superadmin@test.local",
-    name: "Super Admin Test",
+    name: "Super Admin Test", 
     role: "super_admin",
   },
   {

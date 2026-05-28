@@ -508,12 +508,17 @@ export default async function ProjectDetailPage({
               className="flex items-end gap-2"
             >
               <input type="hidden" name="projectId" value={projectId} />
-              <input
-                type="file"
-                name="file"
-                className="flex-1 rounded border border-neutral-300 px-3 py-1.5 text-sm file:mr-3 file:rounded file:border-0 file:bg-neutral-100 file:px-2 file:py-1 file:text-xs file:font-medium file:text-neutral-700 hover:file:bg-neutral-200"
-                required
-              />
+              <div className="flex-1 space-y-1">
+                <input
+                  type="file"
+                  name="file"
+                  className="w-full rounded border border-neutral-300 px-3 py-1.5 text-sm file:mr-3 file:rounded file:border-0 file:bg-neutral-100 file:px-2 file:py-1 file:text-xs file:font-medium file:text-neutral-700 hover:file:bg-neutral-200"
+                  required
+                />
+                <p className="text-xs text-neutral-400">
+                  PDF o imagen, maximo 10 MB
+                </p>
+              </div>
               <button
                 type="submit"
                 className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 shrink-0"
@@ -535,6 +540,7 @@ export default async function ProjectDetailPage({
                   fileName={file.fileName}
                   signedUrl={signedUrl}
                   size={file.size}
+                  fileType={file.fileType}
                 >
                   {canDelete && (
                     <form action={deleteProjectFileAction}>
@@ -700,6 +706,7 @@ export default async function ProjectDetailPage({
                             fileName={file.fileName}
                             signedUrl={signedUrl}
                             size={file.size}
+                            fileType={file.fileType}
                           >
                             {canDeleteFile && (
                               <form action={deleteUpdateFileAction}>
@@ -738,11 +745,16 @@ export default async function ProjectDetailPage({
                             name="projectId"
                             value={projectId}
                           />
-                          <input
-                            type="file"
-                            name="file"
-                            className="flex-1 rounded border border-neutral-300 px-2 py-1 text-xs file:mr-2 file:rounded file:border-0 file:bg-neutral-100 file:px-1.5 file:py-0.5 file:text-xs file:font-medium file:text-neutral-700"
-                          />
+                          <div className="flex-1 space-y-1">
+                            <input
+                              type="file"
+                              name="file"
+                              className="w-full rounded border border-neutral-300 px-2 py-1 text-xs file:mr-2 file:rounded file:border-0 file:bg-neutral-100 file:px-1.5 file:py-0.5 file:text-xs file:font-medium file:text-neutral-700"
+                            />
+                            <p className="text-xs text-neutral-400">
+                              Fotos, videos o PDF. Imagen/PDF max. 10 MB, video max. 50 MB
+                            </p>
+                          </div>
                           <button
                             type="submit"
                             className="rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-800 shrink-0"

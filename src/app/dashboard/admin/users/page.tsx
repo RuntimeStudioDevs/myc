@@ -32,7 +32,7 @@ export default async function AdminUsersPage({
             </p>
           </div>
           <Link
-            href="/dashboard/admin/users"
+            href="/dashboard/admin"
             className="text-sm text-neutral-500 underline hover:text-neutral-900"
           >
             Volver al admin

@@ -325,6 +325,7 @@ export default async function ClientDashboardPage({
                               fileName={file.fileName}
                               signedUrl={signedUrl}
                               size={file.size}
+                              fileType={file.fileType}
                             />
                           ))}
                         </div>

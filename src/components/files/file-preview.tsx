@@ -4,6 +4,7 @@ interface FilePreviewProps {
   fileName: string;
   signedUrl: string | null;
   size: number;
+  fileType?: string;
   children?: ReactNode;
 }
 
@@ -52,9 +53,20 @@ export function FilePreview({
   fileName,
   signedUrl,
   size,
+  fileType,
   children,
 }: FilePreviewProps) {
-  const mimeType = inferMimeType(fileName);
+  const mimeType = fileType
+    ? fileType === "video"
+      ? "video/mp4"
+      : fileType === "foto"
+        ? "image/jpeg"
+        : fileType === "pdf" || fileType === "documento"
+          ? "application/pdf"
+          : fileType.startsWith("video/") || fileType.startsWith("image/")
+            ? fileType
+            : inferMimeType(fileName)
+    : inferMimeType(fileName);
   const isImage = mimeType.startsWith("image/");
   const sizeLabel = formatSize(size);
 
