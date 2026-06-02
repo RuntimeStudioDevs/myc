@@ -38,24 +38,31 @@
 - **Actualizaciones de obra**: Crear, editar (UI inline con `InlineUpdateEditor`), soft-delete. Cambio opcional de estado/progreso. Historial vinculado
 - **Historial de estado/progreso**: Registro en `historial_estado_obra` en cada cambio relevante, con transacciones atomicas
 - **Guard por obra asignada**: Ingeniero y marketing solo ven/operan obras donde estan asignados
-- **Supabase Storage**: Subida y descarga de archivos con signed URLs (300s). Validacion de MIME types y tamanos. `React.cache` por request
+- **Supabase Storage**: Subida y descarga de archivos con signed URLs (300s). Validacion de MIME types y tamanos. `React.cache` por request. **Solo legacy — archivos antiguos.**
+- **Cloudinary Storage**: Servicio server-only para archivos nuevos. Upload/destroy/signed URL. `type: "upload"`, resource_type por MIME. Imagenes → `image`, Videos → `video`, PDF → `raw`. Carpeta `documents/` para PDF, `images/` para imagenes, `evidence/` para actualizaciones.
+- **Visor PDF interno**: Ruta `/dashboard/projects/[projectId]/files/[fileId]` y `/dashboard/projects/[projectId]/updates/[updateId]/files/[fileId]`. Componente `PdfViewer` con react-pdf: pagina por pagina, zoom (+/-/reset), loading, error. Route handlers de descarga con `Content-Disposition: attachment` y nombre legible.
+- **FilePreview mejorado**: PDFs → link al visor interno. Imagenes → miniatura + URL directa. Videos → badge + URL directa. FilePreview recibe `projectId`, `fileId`, `updateId` para rutear correctamente.
+- **Control de videos**: `MAX_VIDEO_SIZE = 25 MB`. Maximo 1 video activo por actualizacion. Video solo permitido en actualizaciones (`ALLOWED_UPDATE_FILE_TYPES`), prohibido en archivos de obra (`ALLOWED_PROJECT_FILE_TYPES` sin video). Inputs con `accept` restrictivo.
+- **Permisos de visualizacion**: `canViewProjectFile` y `canViewUpdateFile` — super_admin, asignados, cliente dueno de obra.
 - **Comentarios**: CRUD completo de comentarios de actualizacion y comentarios generales de obra. Edicion inline con `InlineCommentEditor`
 - **Vista del cliente**: Dashboard `/dashboard/client` con obras, progreso, actualizaciones, archivos, comentarios. Solo ve sus obras
 - **RLS en 10 tablas**: 23 politicas SELECT con helper functions. `(SELECT auth.uid())` optimizado. `auth_rls_initplan` eliminado
 - **Indexes de BD**: 20 indices compuestos y FK en 10 tablas
 - **Supabase Realtime**: 7 tablas en publicacion, componente `ProjectRealtimeListener` con `router.refresh()`, debounce 2s, cleanup async seguro
-- **Pruebas automatizadas**: 74 tests en 6 archivos (comentarios, archivos, proyectos, actualizaciones, asignaciones, clientes)
-- **UX completa**: `loading.tsx` por segmento (4 skeletons), `error.tsx` con boton reintentar, `not-found.tsx` personalizado
+- **Pruebas automatizadas**: 171 tests en 7 archivos (comentarios, archivos, proyectos, actualizaciones, asignaciones, clientes, visor PDF)
+- **UX completa**: `loading.tsx` por segmento (4 skeletons), `error.tsx` con boton reintentar y link "Volver al dashboard", `not-found.tsx` personalizado
+- **Cloudinary**: Integracion controlada para imagenes, videos y PDF nuevos. Supabase Storage legacy para archivos antiguos.
+- **Visor PDF**: Render pagina por pagina con react-pdf, zoom, descarga con nombre legible.
+- **Control de videos**: Maximo 1 video por actualizacion, 25 MB maximo. Solo desde actualizaciones, no desde archivos de obra.
 - **Documentacion**: `README.md` tecnico completo, `CHANGELOG.md`, `.env.example` con placeholders seguros
 - **Conexion local**: Prisma conecta via Supabase Session Pooler (IPv4)
 - **Middleware**: `src/proxy.ts` activo (Next.js 16). Refresca sesion y protege `/dashboard`
 
 ### Pendientes menores
 
-- Tests de integracion directa para server actions (solo queries de permiso testeadas)
 - Lazy loading de signed URLs si el volumen de archivos escala
 - `loading.tsx` y `error.tsx` por segmento en subrutas de segundo nivel (opcional)
-- `dashboard/admin/page.tsx` como hub si se agregan mas modulos administrativos (opcional)
+- Evaluar `type: "private"` o `type: "authenticated"` en Cloudinary si se requiere mayor seguridad documental (actualmente `type: "upload"` con URL no adivinable por UUID)
 
 ---
 
@@ -304,6 +311,17 @@ El proyecto tiene modelos de archivos en Prisma pero **no tiene integracion real
 | `CHANGELOG.md` | Registro cronologico de cambios | Completo |
 | `.env.example` | Plantilla de variables de entorno | Completo |
 | `notas-y-actualizaciones/mateo.md` | Este archivo — historial detallado | Actualizado |
+| `src/lib/cloudinary/service.ts` | Servicio Cloudinary server-only: upload, destroy, signed URL, thumbnail | Funcional |
+| `src/lib/projects/files/actions.ts` | Upload/delete/getUrl de archivos de obra (Cloudinary + Supabase) | Funcional |
+| `src/lib/projects/updates/files/actions.ts` | Upload/delete/getUrl de archivos de actualizacion (Cloudinary + Supabase) | Funcional |
+| `src/lib/projects/files/queries.ts` | Queries de archivos de obra + `canViewProjectFile` | Funcional |
+| `src/lib/projects/updates/files/queries.ts` | Queries de archivos de actualizacion + `canViewUpdateFile` | Funcional |
+| `src/components/files/pdf-viewer.tsx` | Visor PDF con react-pdf: pagina por pagina, zoom, loading, error | Funcional |
+| `src/app/dashboard/projects/[projectId]/files/[fileId]/page.tsx` | Visor PDF de archivo de obra con descarga | Funcional |
+| `src/app/dashboard/projects/[projectId]/updates/[updateId]/files/[fileId]/page.tsx` | Visor PDF de archivo de actualizacion con descarga | Funcional |
+| `src/app/dashboard/projects/[projectId]/files/[fileId]/download/route.ts` | Route handler descarga PDF obra con nombre legible | Funcional |
+| `src/app/dashboard/projects/[projectId]/updates/[updateId]/files/[fileId]/download/route.ts` | Route handler descarga PDF actualizacion con nombre legible | Funcional |
+| `tests/permissions/pdf-viewer.test.ts` | Tests de permisos y acceso al visor PDF | Funcional |
 
 ---
 
@@ -387,11 +405,11 @@ El proyecto tiene modelos de archivos en Prisma pero **no tiene integracion real
 
 Ordenadas por prioridad:
 
-1. **Commit y push**: Consolidar todos los cambios de estabilizacion en el repositorio. `git add . && git commit -m "feat: estabilizacion del MVP" && git push`
-2. **Despliegue**: Configurar entorno de produccion (Vercel o similar) con las 5 variables de entorno. Aplicar migraciones. Verificar RLS en produccion
-3. **Tests de integracion para server actions**: Pasar de 74 tests de queries de permiso a tests de acciones completas con mock de `redirect` y `revalidatePath`
-4. **Lazy loading de signed URLs**: Si el volumen de archivos por obra crece, implementar firma de URL al hacer clic en "Ver" en lugar de prefirmar todas
-5. **`dashboard/admin/page.tsx`**: Hub administrativo si se agregan mas modulos de administracion (reportes, configuracion, logs)
+1. **Commit y push**: Consolidar todos los cambios (Cloudinary, PDF viewer, video control, navegacion). `git add . && git commit -m "feat: integracion Cloudinary, visor PDF, control videos" && git push`
+2. **Despliegue**: Configurar entorno de produccion (Vercel o similar) con 8 variables de entorno. Verificar RLS y Cloudinary en produccion.
+3. **Monitoreo de costos Cloudinary**: Revisar consumo de storage + ancho de banda en dashboard de Cloudinary tras el despliegue.
+4. **Lazy loading de signed URLs**: Si el volumen de archivos por obra crece, implementar firma de URL al hacer clic en "Ver" en lugar de prefirmar todas.
+5. **Evaluar seguridad documental**: Si se requiere mayor proteccion para PDF, evaluar `type: "private"` o `type: "authenticated"` en Cloudinary con URL firmada por request.
 
 ---
 
@@ -499,3 +517,158 @@ Ordenadas por prioridad:
 - `onlyActiveUsers` en `listClients` para marketing
 - InlineCommentEditor recibe `canEdit` semanticamente correcto
 - Formularios de comentarios con `required` en frontend
+
+---
+
+## Integracion Cloudinary Controlado — 2026-06-02
+
+> Sesion de implementacion de Cloudinary como proveedor multimedia, migracion de PDF, visor PDF interno, control de videos, correccion de bugs de navegacion y cambios de limites de archivos.
+
+### Resumen de cambios en esta sesion
+
+| Area | Cambios |
+|------|---------|
+| **Limites archivos** | `MAX_FILE_SIZE`: 10 MiB → 10 MB decimal (10,000,000 bytes). `bodySizeLimit`: 12mb → 60mb. `MAX_VIDEO_SIZE`: 50 MB → 25 MB. |
+| **Cloudinary** | Nuevo servicio `src/lib/cloudinary/service.ts`. Upload, destroy, signed URL, thumbnail. `type: "upload"`, `resource_type` segun MIME. |
+| **Prisma** | `provider` y `providerId` en `UpdateFile` y `ProjectFile`. SQL aplicado via Supabase. |
+| **Backend** | `resolveStorageProvider`: todo nuevo → Cloudinary. Upload/delete/getUrl bifurcan por provider. `generateSignedUrl`: Cloudinary → `secure_url` directo, Supabase → signed URL 300s. |
+| **PDF en Cloudinary** | `resource_type: "raw"`, carpeta `documents/`. `stripExtension()` evita `.pdf.pdf`. `getResourceType("application/pdf")` → `"raw"`. |
+| **Visor PDF** | 4 rutas nuevas: visor obra, visor update, descarga obra, descarga update. Componente `PdfViewer` con react-pdf. `canViewProjectFile`/`canViewUpdateFile`. |
+| **FilePreview** | PDFs → link a visor interno. Imagen/video → URL directa. Props `projectId`, `fileId`, `updateId`. |
+| **Control video** | `MAX_VIDEO_SIZE = 25 MB`. Maximo 1 video activo por update. Contador `fileType: "video"` + `deletedAt: null`. Error `video-limit-reached`. |
+| **Navegacion** | Auditoria 35 links. 0 incorrectos. Error boundary: agregado "Volver al dashboard". |
+| **UI** | `accept` restrictivo en inputs. Help text actualizado: "Fotos, PDF o 1 video corto por actualizacion. Video maximo 25 MB." |
+| **Tests** | 171 tests en 7 archivos (+97 tests respecto a la estabilizacion del MVP). |
+| **Variables entorno** | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` en `.env.local` y `.env.example`. |
+
+### Linea de tiempo de cambios
+
+1. **FilePreview bug fix**: `fileType="video"` no mostraba badge "Video". Mapeo corregido de enums Prisma a MIME types.
+2. **Pruebas MIME/extension**: +32 tests para `ALLOWED_PROJECT_FILE_TYPES`, `ALLOWED_UPDATE_FILE_TYPES`, `isValidExtension`, `ALLOWED_VIDEO_TYPES`.
+3. **MAX_FILE_SIZE**: cambiado de `10 * 1024 * 1024` a `10 * 1000 * 1000` (10 MB decimal = 10,000 KB).
+4. **bodySizeLimit**: `next.config.ts` → `experimental.serverActions.bodySizeLimit: "60mb"` para aceptar videos.
+5. **Analisis Cloudinary**: Auditoria de 18 areas. Veredicto: no recomendable. Usuario decidio proceder.
+6. **Servicio Cloudinary**: `src/lib/cloudinary/service.ts` con `uploadToCloudinary`, `destroyCloudinaryFile`, `getCloudinarySignedUrl`, `getCloudinaryThumbnailUrl`, `isCloudinaryConfigured`. Configuracion desde `CLOUDINARY_*` env vars. `type: "upload"`, `resource_type` detectado por MIME.
+7. **Campos Prisma**: `provider String?` y `providerId String?` en `UpdateFile` y `ProjectFile`. SQL: `ALTER TABLE ADD COLUMN IF NOT EXISTS proveedor TEXT` para ambas tablas.
+8. **storage.ts**: `resolveStorageProvider` centralizado. `generateSignedUrl` acepta record `{provider, providerId, url}` y bifurca.
+9. **Upload actions**: Bifurcacion Cloudinary/Supabase en `uploadProjectFileAction` y `uploadUpdateFileAction`. Si Cloudinary falla → limpieza de huerfano. Si Prisma falla tras Cloudinary → `destroyCloudinaryFile`.
+10. **Delete actions**: Deteccion de provider. Cloudinary → `destroyCloudinaryFile`. Supabase → `supabase.storage.remove`.
+11. **Queries**: `listProjectFiles`, `listProjectUpdates`, `listClientProjects` incluyen `provider` y `providerId` en sus selects.
+12. **Vistas**: `generateSignedUrl(file.url)` → `generateSignedUrl(file)` en `[projectId]/page.tsx` y `client/page.tsx`.
+13. **.env.example y .env.local**: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`.
+14. **Credenciales reales**: cloud_name=`dnfgkdp6g` configurado en `.env.local`.
+15. **Fix Cloudinary 404**: `type: "private"` → `type: "upload"`. `generateSignedUrl` retorna `record.url` (secure_url) directo en vez de regenerar signed URL con `cloudinary.url()`.
+16. **Fix PDF extension**: `public_id` usaba `Date.now()` + `unique_filename: true` → cambiado a `crypto.randomUUID()` sin `unique_filename`. `stripExtension()` evita `.pdf.pdf`.
+17. **Fix PDF resource_type**: `getResourceType("application/pdf")` → `"raw"` (antes `"image"`). Carpeta `documents/` (antes `images/`).
+18. **Fix double extension**: `stripExtension(filename)` remueve extension del public_id antes de subir.
+19. **Fix delete para PDF**: delete actions detectan `.pdf` en URL → `resourceType: "raw"`.
+20. **Fix video delete**: delete actions detectan video por extension → `resourceType: "video"`.
+21. **Auditoria navegacion**: 35 links/botones revisados. Todos correctos. `router.back()` no usado para navegacion.
+22. **Error boundary**: Agregado `Link` "Volver al dashboard" → `/dashboard` (redirect por rol) en `dashboard/error.tsx`.
+23. **Control video**: `MAX_VIDEO_SIZE`: 50→25 MB. Limite 1 video activo por update con `prisma.updateFile.count({fileType: "video", deletedAt: null})`. Error `video-limit-reached`. Help text actualizado.
+24. **Logs diagnosticos**: Agregados temporalmente con prefijo `[MYC-UPLOAD]`, `[MYC-URL]`, `[MYC-PROVIDER]`. Luego limpiados, dejando solo `console.error` para fallos.
+25. **Validacion final**: 171 tests, ESLint 0/0, build 17 rutas.
+
+### Arquitectura final de almacenamiento
+
+```
+Todos los archivos NUEVOS → Cloudinary
+  ├── Imagenes → resource_type: "image", carpeta: images/ o evidence/
+  ├── Videos   → resource_type: "video", carpeta: evidence/ (solo updates, max 1, 25 MB)
+  └── PDF      → resource_type: "raw",   carpeta: documents/
+
+Archivos ANTIGUOS → Supabase Storage
+  └── provider = null o "supabase" → signed URL 300s
+
+Base de datos
+  ├── provider: "cloudinary" | "supabase" | null
+  ├── providerId: public_id (Cloudinary) o null (Supabase)
+  └── url: secure_url (Cloudinary) o path interno (Supabase)
+
+generateSignedUrl
+  ├── provider === "cloudinary" → retorna record.url (secure_url directo)
+  └── else → supabase.storage.createSignedUrl(path, 300)
+```
+
+### Estrategia Cloudinary por tipo
+
+| Tipo | resource_type | Carpeta obra | Carpeta update | URL |
+|------|--------------|-------------|---------------|-----|
+| Imagen (jpg/png/webp) | `image` | `images/` | `evidence/` | secure_url directo |
+| Video (mp4/webm/mov) | `video` | N/A (prohibido) | `evidence/` | secure_url directo |
+| PDF | `raw` | `documents/` | `documents/` | secure_url directo |
+
+### Control de videos — reglas
+
+| Regla | Implementacion |
+|-------|---------------|
+| Solo en actualizaciones | `ALLOWED_PROJECT_FILE_TYPES` sin video. `accept` en input de obra sin `.mp4,.webm,.mov`. |
+| Maximo 25 MB | `MAX_VIDEO_SIZE = 25 * 1024 * 1024` |
+| Maximo 1 por update | `prisma.updateFile.count({updateId, fileType: "video", deletedAt: null})` antes del upload |
+| Video eliminado no cuenta | `deletedAt: null` en el filtro de conteo |
+| Cliente no puede subir | `canUploadUpdateFile` retorna false para cliente |
+
+### Visor PDF — rutas nuevas
+
+| Ruta | Funcion | Permiso |
+|------|---------|---------|
+| `/dashboard/projects/[projectId]/files/[fileId]` | Visor PDF obra (react-pdf) | `canViewProjectFile` |
+| `/dashboard/projects/[projectId]/files/[fileId]/download` | Descarga PDF obra | `canViewProjectFile` |
+| `/dashboard/projects/[projectId]/updates/[updateId]/files/[fileId]` | Visor PDF update | `canViewUpdateFile` |
+| `/dashboard/projects/[projectId]/updates/[updateId]/files/[fileId]/download` | Descarga PDF update | `canViewUpdateFile` |
+
+### Variables de entorno actuales
+
+```bash
+# Supabase (existentes)
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+
+# Base de datos (existentes)
+DATABASE_URL
+DIRECT_URL
+
+# Cloudinary (nuevas — SIN NEXT_PUBLIC_)
+CLOUDINARY_CLOUD_NAME
+CLOUDINARY_API_KEY
+CLOUDINARY_API_SECRET
+```
+
+### Estado actual de tests
+
+| Archivo | Tests | Area |
+|---------|-------|------|
+| `permissions/files.test.ts` | ~57 | Permisos archivos, MIME, extension, provider, signed URL, video limits |
+| `permissions/updates.test.ts` | ~20 | Permisos actualizaciones, delete rollback |
+| `permissions/assignments.test.ts` | ~20 | Permisos asignaciones |
+| `permissions/clients.test.ts` | ~20 | Permisos clientes |
+| `permissions/comments.test.ts` | ~20 | Permisos comentarios |
+| `permissions/projects.test.ts` | ~15 | Permisos obras |
+| `permissions/pdf-viewer.test.ts` | ~21 | Permisos y acceso visor PDF |
+| **Total** | **171** | **7 archivos** |
+
+### Comandos de validacion (todos pasan)
+
+| Comando | Resultado |
+|---|---|
+| `npx prisma generate` | OK |
+| `npx prisma validate` | Schema valido |
+| `npx eslint --cache .` | 0 errores, 0 warnings |
+| `npx vitest run` | 7 archivos, 171 tests pasan |
+| `npx next build` | 17 rutas compiladas, TypeScript OK |
+
+### Riesgos pendientes
+
+| Riesgo | Severidad | Recomendacion |
+|--------|-----------|---------------|
+| Cloudinary `type: "upload"` → URL accesible sin autenticacion si se conoce el public_id | Baja | public_id incluye `crypto.randomUUID()` — imposible de adivinar. Evaluar `type: "private"` en el futuro si se requiere mayor seguridad. |
+| `bodySizeLimit: 60mb` requiere reinicio del dev server tras cambio en next.config.ts | Baja | Documentado en instrucciones de revision. |
+| Supabase Storage legacy — archivos antiguos dependen de bucket `myc-project-files` | Media | Mantener bucket. No migrar archivos antiguos sin plan. |
+| `.env.local` contiene credenciales reales de Cloudinary | Baja | No trackeado por Git (`.gitignore` cubre `.env*`). |
+
+---
+
+## Configuracion inicial — version anterior
+
+> Las secciones siguientes documentan la configuracion inicial y la estabilizacion del MVP (sesiones anteriores).

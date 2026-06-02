@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 interface FilePreviewProps {
@@ -5,6 +6,9 @@ interface FilePreviewProps {
   signedUrl: string | null;
   size: number;
   fileType?: string;
+  projectId?: string;
+  fileId?: string;
+  updateId?: string;
   children?: ReactNode;
 }
 
@@ -54,6 +58,9 @@ export function FilePreview({
   signedUrl,
   size,
   fileType,
+  projectId,
+  fileId,
+  updateId,
   children,
 }: FilePreviewProps) {
   const mimeType = fileType
@@ -81,7 +88,27 @@ export function FilePreview({
     <TypeBadge mimeType={mimeType} />
   );
 
-  const viewLink = signedUrl ? (
+  const isProjectPdf =
+    mimeType === "application/pdf" && projectId && fileId && !updateId;
+
+  const isUpdatePdf =
+    mimeType === "application/pdf" && projectId && updateId && fileId;
+
+  const viewLink = isProjectPdf ? (
+    <Link
+      href={`/dashboard/projects/${projectId}/files/${fileId}`}
+      className="rounded bg-neutral-100 px-2 py-0.5 text-xs hover:bg-neutral-200 shrink-0"
+    >
+      Ver
+    </Link>
+  ) : isUpdatePdf ? (
+    <Link
+      href={`/dashboard/projects/${projectId}/updates/${updateId}/files/${fileId}`}
+      className="rounded bg-neutral-100 px-2 py-0.5 text-xs hover:bg-neutral-200 shrink-0"
+    >
+      Ver
+    </Link>
+  ) : signedUrl ? (
     <a
       href={signedUrl}
       target="_blank"

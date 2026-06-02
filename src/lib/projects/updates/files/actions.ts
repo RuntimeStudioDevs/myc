@@ -18,7 +18,14 @@ import {
   isValidMimeType,
   isValidFileSize,
   isValidExtension,
+  resolveStorageProvider,
+  generateSignedUrl,
 } from "@/lib/projects/storage";
+import {
+  isCloudinaryConfigured,
+  uploadToCloudinary,
+  destroyCloudinaryFile,
+} from "@/lib/cloudinary/service";
 
 export async function uploadUpdateFileAction(formData: FormData) {
   const profile = await getCurrentUserProfile();
@@ -71,33 +78,96 @@ export async function uploadUpdateFileAction(formData: FormData) {
     return redirect(`${fallback}?error=not-authorized`);
   }
 
-  const safeName = `${sanitizeFilename(file.name || "archivo")}`;
-  const filePath = buildUpdateFilePath(projectId, updateId, safeName);
-  const supabaseAdmin = createAdminClient();
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const { error: uploadError } = await supabaseAdmin.storage
-    .from(STORAGE_BUCKET)
-    .upload(filePath, buffer, {
-      contentType: file.type,
-      upsert: false,
+  if (isVideo) {
+    const existingVideos = await prisma.updateFile.count({
+      where: {
+        updateId,
+        fileType: "video",
+        deletedAt: null,
+      },
     });
-
-  if (uploadError) {
-    const fallback = returnTo ?? `/dashboard/projects/${projectId}`;
-    return redirect(`${fallback}?error=upload-failed`);
+    if (existingVideos >= 1) {
+      const fallback = returnTo ?? `/dashboard/projects/${projectId}`;
+      return redirect(`${fallback}?error=video-limit-reached`);
+    }
   }
 
-  await prisma.updateFile.create({
-    data: {
-      updateId,
-      fileType: classifyUpdateFileType(file.type),
-      url: filePath,
-      fileName: file.name || "archivo",
-      size: file.size,
-      uploadedBy: profile.id,
-    },
-  });
+  const provider = resolveStorageProvider(file.type);
+  const fallback = returnTo ?? `/dashboard/projects/${projectId}`;
+
+  if (provider === "cloudinary") {
+    if (!isCloudinaryConfigured()) {
+      return redirect(`${fallback}?error=upload-failed`);
+    }
+
+    const isPdf = file.type === "application/pdf";
+    const folder = isPdf
+      ? `myc/projects/${projectId}/updates/${updateId}/documents`
+      : `myc/projects/${projectId}/updates/${updateId}/evidence`;
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    let cloudinaryResult;
+    try {
+      cloudinaryResult = await uploadToCloudinary(buffer, {
+        mimeType: file.type,
+        folder,
+        filename: sanitizeFilename(file.name || "archivo"),
+      });
+    } catch (e) {
+      console.error("[MYC-UPLOAD] Cloudinary upload failed:", e instanceof Error ? e.message : String(e));
+      return redirect(`${fallback}?error=upload-failed`);
+    }
+
+    try {
+      await prisma.updateFile.create({
+        data: {
+          updateId,
+          fileType: classifyUpdateFileType(file.type),
+          url: cloudinaryResult.secureUrl,
+          fileName: file.name || "archivo",
+          size: file.size,
+          uploadedBy: profile.id,
+          provider: "cloudinary",
+          providerId: cloudinaryResult.publicId,
+        },
+      });
+    } catch {
+      await destroyCloudinaryFile(
+        cloudinaryResult.publicId,
+        cloudinaryResult.resourceType as "image" | "video" | "raw",
+      );
+      return redirect(`${fallback}?error=upload-failed`);
+    }
+  } else {
+    const safeName = `${sanitizeFilename(file.name || "archivo")}`;
+    const filePath = buildUpdateFilePath(projectId, updateId, safeName);
+    const supabaseAdmin = createAdminClient();
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from(STORAGE_BUCKET)
+      .upload(filePath, buffer, {
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error("[MYC-UPLOAD] Supabase upload failed:", JSON.stringify(uploadError));
+      return redirect(`${fallback}?error=upload-failed`);
+    }
+
+    await prisma.updateFile.create({
+      data: {
+        updateId,
+        fileType: classifyUpdateFileType(file.type),
+        url: filePath,
+        fileName: file.name || "archivo",
+        size: file.size,
+        uploadedBy: profile.id,
+        provider: "supabase",
+      },
+    });
+  }
 
   revalidatePath(`/dashboard/projects/${projectId}`);
   if (returnTo) {
@@ -125,6 +195,8 @@ export async function deleteUpdateFileAction(formData: FormData) {
     select: {
       id: true,
       url: true,
+      provider: true,
+      providerId: true,
       update: {
         select: {
           id: true,
@@ -150,9 +222,25 @@ export async function deleteUpdateFileAction(formData: FormData) {
     data: { deletedAt: new Date() },
   });
 
-  // Intentar eliminar de Storage
-  const supabaseAdmin = createAdminClient();
-  await supabaseAdmin.storage.from(STORAGE_BUCKET).remove([file.url]);
+  // Intentar eliminar del proveedor
+  if (file.provider === "cloudinary" && file.providerId) {
+    const resourceType =
+      file.url?.endsWith(".mp4") ||
+      file.url?.endsWith(".webm") ||
+      file.url?.endsWith(".mov")
+        ? "video"
+        : file.url?.endsWith(".pdf")
+          ? "raw"
+          : "image";
+    await destroyCloudinaryFile(file.providerId, resourceType);
+  } else {
+    try {
+      const supabaseAdmin = createAdminClient();
+      await supabaseAdmin.storage.from(STORAGE_BUCKET).remove([file.url]);
+    } catch {
+      // El archivo ya puede no existir en storage
+    }
+  }
 
   revalidatePath(`/dashboard/projects/${file.update.projectId}`);
   if (returnTo) {
@@ -173,6 +261,8 @@ export async function getUpdateFileUrlAction(fileId: string) {
     select: {
       id: true,
       url: true,
+      provider: true,
+      providerId: true,
       update: {
         select: { deletedAt: true },
       },
@@ -181,10 +271,9 @@ export async function getUpdateFileUrlAction(fileId: string) {
 
   if (!file || file.update.deletedAt) return null;
 
-  const supabaseAdmin = createAdminClient();
-  const { data } = await supabaseAdmin.storage
-    .from(STORAGE_BUCKET)
-    .createSignedUrl(file.url, 300);
-
-  return data?.signedUrl ?? null;
+  return generateSignedUrl({
+    provider: file.provider,
+    providerId: file.providerId,
+    url: file.url,
+  });
 }

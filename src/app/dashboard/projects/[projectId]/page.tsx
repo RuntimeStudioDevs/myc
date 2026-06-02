@@ -183,7 +183,7 @@ export default async function ProjectDetailPage({
       const updateFilesWithUrls = await Promise.all(
         update.files.map(async (file) => ({
           file,
-          signedUrl: await generateSignedUrl(file.url),
+          signedUrl: await generateSignedUrl(file),
           canDelete: await canDeleteUpdateFile(profile, file.id),
         })),
       );
@@ -207,7 +207,7 @@ export default async function ProjectDetailPage({
   const projectFilesWithUrls = await Promise.all(
     projectFiles.map(async (file) => ({
       file,
-      signedUrl: await generateSignedUrl(file.url),
+      signedUrl: await generateSignedUrl(file),
       canDelete: await canDeleteProjectFile(profile, file.id),
     })),
   );
@@ -512,6 +512,7 @@ export default async function ProjectDetailPage({
                 <input
                   type="file"
                   name="file"
+                  accept=".jpg,.jpeg,.png,.webp,.pdf"
                   className="w-full rounded border border-neutral-300 px-3 py-1.5 text-sm file:mr-3 file:rounded file:border-0 file:bg-neutral-100 file:px-2 file:py-1 file:text-xs file:font-medium file:text-neutral-700 hover:file:bg-neutral-200"
                   required
                 />
@@ -541,6 +542,8 @@ export default async function ProjectDetailPage({
                   signedUrl={signedUrl}
                   size={file.size}
                   fileType={file.fileType}
+                  projectId={projectId}
+                  fileId={file.id}
                 >
                   {canDelete && (
                     <form action={deleteProjectFileAction}>
@@ -707,6 +710,9 @@ export default async function ProjectDetailPage({
                             signedUrl={signedUrl}
                             size={file.size}
                             fileType={file.fileType}
+                            projectId={projectId}
+                            updateId={update.id}
+                            fileId={file.id}
                           >
                             {canDeleteFile && (
                               <form action={deleteUpdateFileAction}>
@@ -749,10 +755,11 @@ export default async function ProjectDetailPage({
                             <input
                               type="file"
                               name="file"
+                              accept=".jpg,.jpeg,.png,.webp,.mp4,.webm,.mov,.pdf"
                               className="w-full rounded border border-neutral-300 px-2 py-1 text-xs file:mr-2 file:rounded file:border-0 file:bg-neutral-100 file:px-1.5 file:py-0.5 file:text-xs file:font-medium file:text-neutral-700"
                             />
                             <p className="text-xs text-neutral-400">
-                              Fotos, videos o PDF. Imagen/PDF max. 10 MB, video max. 50 MB
+                              Fotos, PDF o 1 video corto por actualización. Video máximo 25 MB.
                             </p>
                           </div>
                           <button

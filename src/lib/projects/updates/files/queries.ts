@@ -68,3 +68,30 @@ export async function canDeleteUpdateFile(
 
   return false;
 }
+
+export async function canViewUpdateFile(
+  profile: PrismaUser,
+  projectId: string,
+): Promise<boolean> {
+  if (profile.role === "super_admin") return true;
+
+  const hasAssignment = await prisma.projectAssignment.findFirst({
+    where: {
+      projectId,
+      userId: profile.id,
+      unassignedAt: null,
+    },
+  });
+
+  if (hasAssignment) return true;
+
+  if (profile.role === "cliente") {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId, deletedAt: null },
+      select: { client: { select: { userId: true } } },
+    });
+    return project?.client?.userId === profile.id;
+  }
+
+  return false;
+}

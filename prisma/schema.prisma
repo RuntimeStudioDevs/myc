@@ -239,6 +239,8 @@ model UpdateFile {
   size       Int            @map("tamano")
   uploadedBy String?        @map("subido_por") @db.Uuid
   uploader   User?          @relation("UpdateFileUploader", fields: [uploadedBy], references: [id])
+  provider   String?        @map("proveedor")
+  providerId String?        @map("proveedor_id")
   deletedAt  DateTime?      @map("eliminado_en")
   createdAt  DateTime       @default(now()) @map("creado_en")
 
@@ -257,6 +259,8 @@ model ProjectFile {
   url        String          @map("url")
   fileName   String          @map("nombre_archivo")
   size       Int             @map("tamano")
+  provider   String?         @map("proveedor")
+  providerId String?         @map("proveedor_id")
   deletedAt  DateTime?       @map("eliminado_en")
   createdAt  DateTime        @default(now()) @map("creado_en")
 

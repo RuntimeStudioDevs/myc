@@ -222,6 +222,8 @@ import {
   ALLOWED_VIDEO_TYPES,
   isValidMimeType,
   isValidExtension,
+  isValidFileSize,
+  MAX_VIDEO_SIZE,
 } from "@/lib/projects/storage";
 
 describe("ALLOWED_PROJECT_FILE_TYPES", () => {
@@ -329,5 +331,168 @@ describe("isValidExtension", () => {
   });
   it("sin extension retorna false", () => {
     expect(isValidExtension("archivo", "image/jpeg")).toBe(false);
+  });
+});
+
+// ---- resolveStorageProvider ----
+
+import { resolveStorageProvider, generateSignedUrl } from "@/lib/projects/storage";
+
+describe("resolveStorageProvider", () => {
+  it("imagen jpeg va a cloudinary", () => {
+    expect(resolveStorageProvider("image/jpeg")).toBe("cloudinary");
+  });
+  it("imagen png va a cloudinary", () => {
+    expect(resolveStorageProvider("image/png")).toBe("cloudinary");
+  });
+  it("imagen webp va a cloudinary", () => {
+    expect(resolveStorageProvider("image/webp")).toBe("cloudinary");
+  });
+  it("video mp4 va a cloudinary", () => {
+    expect(resolveStorageProvider("video/mp4")).toBe("cloudinary");
+  });
+  it("video webm va a cloudinary", () => {
+    expect(resolveStorageProvider("video/webm")).toBe("cloudinary");
+  });
+  it("video quicktime va a cloudinary", () => {
+    expect(resolveStorageProvider("video/quicktime")).toBe("cloudinary");
+  });
+  it("pdf va a cloudinary", () => {
+    expect(resolveStorageProvider("application/pdf")).toBe("cloudinary");
+  });
+  it("mime desconocido va a cloudinary", () => {
+    expect(resolveStorageProvider("application/octet-stream")).toBe("cloudinary");
+  });
+});
+
+// ---- generateSignedUrl ----
+
+vi.mock("@/lib/supabase/admin", () => {
+  return {
+    createAdminClient: vi.fn(() => ({
+      storage: {
+        from: vi.fn(() => ({
+          createSignedUrl: vi.fn(
+            async () => ({ data: { signedUrl: "https://supabase.co/fake-signed" } }),
+          ),
+        })),
+      },
+    })),
+  };
+});
+
+vi.mock("@/lib/cloudinary/service", () => {
+  return {
+    getCloudinarySignedUrl: vi.fn(
+      (publicId: string) => `https://res.cloudinary.com/demo/image/upload/s--sig--/${publicId}`,
+    ),
+  };
+});
+
+describe("generateSignedUrl", () => {
+  it("archivo sin provider (null) usa Supabase", async () => {
+    const url = await generateSignedUrl({
+      provider: null,
+      providerId: null,
+      url: "projects/p1/documents/uuid-file.pdf",
+    });
+    expect(url).toBe("https://supabase.co/fake-signed");
+  });
+
+  it("archivo con provider=supabase usa Supabase", async () => {
+    const url = await generateSignedUrl({
+      provider: "supabase",
+      providerId: null,
+      url: "projects/p1/documents/uuid-file.pdf",
+    });
+    expect(url).toBe("https://supabase.co/fake-signed");
+  });
+
+  it("archivo con provider=cloudinary retorna secureUrl directo", async () => {
+    const cloudinaryUrl = "https://res.cloudinary.com/demo/image/upload/v1/myc/test.jpg";
+    const url = await generateSignedUrl({
+      provider: "cloudinary",
+      providerId: "myc/projects/p1/images/photo",
+      url: cloudinaryUrl,
+    });
+    expect(url).toBe(cloudinaryUrl);
+  });
+
+  it("archivo cloudinary sin url cae a Supabase", async () => {
+    const url = await generateSignedUrl({
+      provider: "cloudinary",
+      providerId: "myc/projects/p1/images/photo",
+      url: "",
+    });
+    expect(url).toBe("https://supabase.co/fake-signed");
+  });
+
+  it("PDF cloudinary retorna secureUrl directo", async () => {
+    const cloudinaryUrl = "https://res.cloudinary.com/demo/image/upload/v1/myc/contrato.pdf";
+    const url = await generateSignedUrl({
+      provider: "cloudinary",
+      providerId: "myc/projects/p1/documents/pdf-uuid",
+      url: cloudinaryUrl,
+    });
+    expect(url).toBe(cloudinaryUrl);
+  });
+
+  it("PDF legacy Supabase sigue usando signed URL", async () => {
+    const url = await generateSignedUrl({
+      provider: "supabase",
+      providerId: null,
+      url: "projects/p1/documents/uuid-contrato.pdf",
+    });
+    expect(url).toBe("https://supabase.co/fake-signed");
+  });
+});
+
+// ---- Video limits ----
+
+describe("MAX_VIDEO_SIZE", () => {
+  it("tiene el valor correcto (25 MB)", () => {
+    expect(MAX_VIDEO_SIZE).toBe(25 * 1024 * 1024);
+  });
+});
+
+describe("isValidFileSize para video", () => {
+  it("video de 25 MB pasa", () => {
+    expect(isValidFileSize(25 * 1024 * 1024, true)).toBe(true);
+  });
+  it("video de 10 MB pasa", () => {
+    expect(isValidFileSize(10 * 1024 * 1024, true)).toBe(true);
+  });
+  it("video de 26 MB se rechaza", () => {
+    expect(isValidFileSize(26 * 1024 * 1024, true)).toBe(false);
+  });
+  it("video de 50 MB se rechaza", () => {
+    expect(isValidFileSize(50 * 1024 * 1024, true)).toBe(false);
+  });
+  it("video con size 0 se rechaza", () => {
+    expect(isValidFileSize(0, true)).toBe(false);
+  });
+});
+
+describe("ALLOWED_PROJECT_FILE_TYPES no incluye video", () => {
+  it("video/mp4 no esta en archivos de obra", () => {
+    expect((ALLOWED_PROJECT_FILE_TYPES as readonly string[]).includes("video/mp4")).toBe(false);
+  });
+  it("video/webm no esta en archivos de obra", () => {
+    expect((ALLOWED_PROJECT_FILE_TYPES as readonly string[]).includes("video/webm")).toBe(false);
+  });
+  it("video/quicktime no esta en archivos de obra", () => {
+    expect((ALLOWED_PROJECT_FILE_TYPES as readonly string[]).includes("video/quicktime")).toBe(false);
+  });
+});
+
+describe("ALLOWED_UPDATE_FILE_TYPES incluye video", () => {
+  it("video/mp4 esta permitido en actualizaciones", () => {
+    expect((ALLOWED_UPDATE_FILE_TYPES as readonly string[]).includes("video/mp4")).toBe(true);
+  });
+  it("video/webm esta permitido en actualizaciones", () => {
+    expect((ALLOWED_UPDATE_FILE_TYPES as readonly string[]).includes("video/webm")).toBe(true);
+  });
+  it("video/quicktime esta permitido en actualizaciones", () => {
+    expect((ALLOWED_UPDATE_FILE_TYPES as readonly string[]).includes("video/quicktime")).toBe(true);
   });
 });

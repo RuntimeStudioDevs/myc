@@ -193,6 +193,8 @@ export async function listClientProjects(clientId: string) {
               url: true,
               fileName: true,
               size: true,
+              provider: true,
+              providerId: true,
             },
           },
         },

@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "db:seed": "npx tsx prisma/seed.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "postinstall": "node scripts/sync-pdf-worker.mjs"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
@@ -16,11 +17,15 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "@strapi/provider-upload-cloudinary": "^5.47.0",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.1",
+    "cloudinary": "^2.10.0",
     "next": "16.2.6",
+    "pdfjs-dist": "5.4.296",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "react-pdf": "^10.4.1",
     "server-only": "^0.0.1"
   },
   "devDependencies": {
