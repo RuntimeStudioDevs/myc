@@ -29,6 +29,8 @@ export async function listProjectUpdates(projectId: string) {
           url: true,
           fileName: true,
           size: true,
+          provider: true,
+          providerId: true,
         },
       },
     },

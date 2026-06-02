@@ -18,7 +18,14 @@ import {
   isValidMimeType,
   isValidFileSize,
   isValidExtension,
+  resolveStorageProvider,
+  generateSignedUrl,
 } from "@/lib/projects/storage";
+import {
+  isCloudinaryConfigured,
+  uploadToCloudinary,
+  destroyCloudinaryFile,
+} from "@/lib/cloudinary/service";
 
 export async function uploadProjectFileAction(formData: FormData) {
   const profile = await getCurrentUserProfile();
@@ -65,33 +72,82 @@ export async function uploadProjectFileAction(formData: FormData) {
     return redirect(`${fallback}?error=not-authorized`);
   }
 
-  const safeName = `${sanitizeFilename(file.name || "archivo")}`;
-  const filePath = buildProjectFilePath(projectId, safeName);
-  const supabaseAdmin = createAdminClient();
+  const provider = resolveStorageProvider(file.type);
+  const fallbackPath = returnTo ?? `/dashboard/projects/${projectId}`;
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const { error: uploadError } = await supabaseAdmin.storage
-    .from(STORAGE_BUCKET)
-    .upload(filePath, buffer, {
-      contentType: file.type,
-      upsert: false,
+  if (provider === "cloudinary") {
+    if (!isCloudinaryConfigured()) {
+      return redirect(`${fallbackPath}?error=upload-failed`);
+    }
+
+    const isPdf = file.type === "application/pdf";
+    const folder = isPdf
+      ? `myc/projects/${projectId}/documents`
+      : `myc/projects/${projectId}/images`;
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    let cloudinaryResult;
+    try {
+      cloudinaryResult = await uploadToCloudinary(buffer, {
+        mimeType: file.type,
+        folder,
+        filename: sanitizeFilename(file.name || "archivo"),
+      });
+    } catch (e) {
+      console.error("[MYC-UPLOAD] Cloudinary upload failed:", e instanceof Error ? e.message : String(e));
+      return redirect(`${fallbackPath}?error=upload-failed`);
+    }
+
+    try {
+      await prisma.projectFile.create({
+        data: {
+          projectId,
+          uploadedBy: profile.id,
+          fileType: classifyProjectFileType(file.type),
+          url: cloudinaryResult.secureUrl,
+          fileName: file.name || "archivo",
+          size: file.size,
+          provider: "cloudinary",
+          providerId: cloudinaryResult.publicId,
+        },
+      });
+    } catch {
+      await destroyCloudinaryFile(
+        cloudinaryResult.publicId,
+        cloudinaryResult.resourceType as "image" | "video" | "raw",
+      );
+      return redirect(`${fallbackPath}?error=upload-failed`);
+    }
+  } else {
+    const safeName = `${sanitizeFilename(file.name || "archivo")}`;
+    const filePath = buildProjectFilePath(projectId, safeName);
+    const supabaseAdmin = createAdminClient();
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from(STORAGE_BUCKET)
+      .upload(filePath, buffer, {
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error("[MYC-UPLOAD] Supabase upload failed:", JSON.stringify(uploadError));
+      return redirect(`${fallbackPath}?error=upload-failed`);
+    }
+
+    await prisma.projectFile.create({
+      data: {
+        projectId,
+        uploadedBy: profile.id,
+        fileType: classifyProjectFileType(file.type),
+        url: filePath,
+        fileName: file.name || "archivo",
+        size: file.size,
+        provider: "supabase",
+      },
     });
-
-  if (uploadError) {
-    const fallback = returnTo ?? `/dashboard/projects/${projectId}`;
-    return redirect(`${fallback}?error=upload-failed`);
   }
-
-  await prisma.projectFile.create({
-    data: {
-      projectId,
-      uploadedBy: profile.id,
-      fileType: classifyProjectFileType(file.type),
-      url: filePath,
-      fileName: file.name || "archivo",
-      size: file.size,
-    },
-  });
 
   revalidatePath(`/dashboard/projects/${projectId}`);
   if (returnTo) {
@@ -116,7 +172,14 @@ export async function deleteProjectFileAction(formData: FormData) {
 
   const file = await prisma.projectFile.findUnique({
     where: { id: fileId },
-    select: { id: true, projectId: true, url: true, deletedAt: true },
+    select: {
+      id: true,
+      projectId: true,
+      url: true,
+      provider: true,
+      providerId: true,
+      deletedAt: true,
+    },
   });
 
   if (!file || file.deletedAt) {
@@ -134,9 +197,18 @@ export async function deleteProjectFileAction(formData: FormData) {
     data: { deletedAt: new Date() },
   });
 
-  // Intentar eliminar de Storage
-  const supabaseAdmin = createAdminClient();
-  await supabaseAdmin.storage.from(STORAGE_BUCKET).remove([file.url]);
+  // Intentar eliminar del proveedor
+  if (file.provider === "cloudinary" && file.providerId) {
+    const resourceType = file.url?.endsWith(".pdf") ? "raw" : "image";
+    await destroyCloudinaryFile(file.providerId, resourceType);
+  } else {
+    try {
+      const supabaseAdmin = createAdminClient();
+      await supabaseAdmin.storage.from(STORAGE_BUCKET).remove([file.url]);
+    } catch {
+      // El archivo ya puede no existir en storage
+    }
+  }
 
   revalidatePath(`/dashboard/projects/${file.projectId}`);
   if (returnTo) {
@@ -154,15 +226,20 @@ export async function getProjectFileUrlAction(fileId: string) {
 
   const file = await prisma.projectFile.findUnique({
     where: { id: fileId },
-    select: { id: true, url: true, deletedAt: true },
+    select: {
+      id: true,
+      url: true,
+      provider: true,
+      providerId: true,
+      deletedAt: true,
+    },
   });
 
   if (!file || file.deletedAt) return null;
 
-  const supabaseAdmin = createAdminClient();
-  const { data } = await supabaseAdmin.storage
-    .from(STORAGE_BUCKET)
-    .createSignedUrl(file.url, 300);
-
-  return data?.signedUrl ?? null;
+  return generateSignedUrl({
+    provider: file.provider,
+    providerId: file.providerId,
+    url: file.url,
+  });
 }

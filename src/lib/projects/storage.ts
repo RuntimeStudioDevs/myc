@@ -11,7 +11,7 @@ export const STORAGE_BUCKET = "myc-project-files";
 
 // Tamaños maximos en bytes
 export const MAX_FILE_SIZE = 10 * 1000 * 1000; // 10 MB (10 000 KB)
-export const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB
+export const MAX_VIDEO_SIZE = 25 * 1024 * 1024; // 25 MB
 
 // Tipos MIME permitidos
 export const ALLOWED_IMAGE_TYPES = [
@@ -137,10 +137,28 @@ export function isValidExtension(filename: string, mimeType: string): boolean {
 }
 
 // Generar signed URL para descarga segura (cacheada por request)
-export const generateSignedUrl = cache(async (filePath: string): Promise<string | null> => {
-  const supabaseAdmin = createAdminClient();
-  const { data } = await supabaseAdmin.storage
-    .from(STORAGE_BUCKET)
-    .createSignedUrl(filePath, 300);
-  return data?.signedUrl ?? null;
-});
+export const generateSignedUrl = cache(
+  async (record: {
+    provider?: string | null;
+    providerId?: string | null;
+    url: string;
+  }): Promise<string | null> => {
+    if (record.provider === "cloudinary" && record.url) {
+      return record.url;
+    }
+
+    const supabaseAdmin = createAdminClient();
+    const { data } = await supabaseAdmin.storage
+      .from(STORAGE_BUCKET)
+      .createSignedUrl(record.url, 300);
+    return data?.signedUrl ?? null;
+  },
+);
+
+// Decidir proveedor de storage segun MIME type
+export type StorageProvider = "supabase" | "cloudinary";
+
+export function resolveStorageProvider(_mimeType: string): StorageProvider {
+  void _mimeType;
+  return "cloudinary";
+}

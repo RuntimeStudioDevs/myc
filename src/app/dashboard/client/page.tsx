@@ -88,7 +88,7 @@ export default async function ClientDashboardPage({
       projectFilesWithUrls: await Promise.all(
         project.files.map(async (file) => ({
           file,
-          signedUrl: await generateSignedUrl(file.url),
+          signedUrl: await generateSignedUrl(file),
         })),
       ),
     })),
@@ -115,7 +115,7 @@ export default async function ClientDashboardPage({
           const updateFilesWithUrls = await Promise.all(
             update.files.map(async (file) => ({
               file,
-              signedUrl: await generateSignedUrl(file.url),
+              signedUrl: await generateSignedUrl(file),
             })),
           );
 
@@ -326,6 +326,8 @@ export default async function ClientDashboardPage({
                               signedUrl={signedUrl}
                               size={file.size}
                               fileType={file.fileType}
+                              projectId={project.id}
+                              fileId={file.id}
                             />
                           ))}
                         </div>
@@ -378,13 +380,16 @@ export default async function ClientDashboardPage({
                               )}
                               {updateFiles.length > 0 && (
                                 <div className="space-y-1">
-                                  {updateFiles.map(({ file, signedUrl }) => (
-                                    <FilePreview
-                                      key={file.id}
-                                      fileName={file.fileName}
-                                      signedUrl={signedUrl}
-                                      size={file.size}
-                                    />
+                              {updateFiles.map(({ file, signedUrl }) => (
+                                <FilePreview
+                                  key={file.id}
+                                  fileName={file.fileName}
+                                  signedUrl={signedUrl}
+                                  size={file.size}
+                                  projectId={project.id}
+                                  updateId={update.id}
+                                  fileId={file.id}
+                                />
                                   ))}
                                 </div>
                               )}

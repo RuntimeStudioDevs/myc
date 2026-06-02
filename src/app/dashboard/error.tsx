@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startTransition } from "react";
 
@@ -42,6 +43,13 @@ export default function DashboardError({
         >
           Reintentar
         </button>
+
+        <Link
+          href="/dashboard"
+          className="block rounded border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50"
+        >
+          Volver al dashboard
+        </Link>
       </div>
     </main>
   );
