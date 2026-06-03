@@ -119,9 +119,26 @@ model User {
   statusHistories    ProjectStatusHistory[]
   updateComments     UpdateComment[]
   projectComments    ProjectComment[]
+  emailChangeRequests EmailChangeRequest[]
 
   @@schema("public")
   @@map("usuarios")
+}
+
+// --- Solicitud de cambio de email ---
+model EmailChangeRequest {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("usuario_id") @db.Uuid
+  user      User      @relation(fields: [userId], references: [id])
+  newEmail  String    @map("nuevo_email")
+  codeHash  String    @map("codigo_hash")
+  expiresAt DateTime  @map("expira_en")
+  attempts  Int       @default(0) @map("intentos")
+  usedAt    DateTime? @map("usado_en")
+  createdAt DateTime  @default(now()) @map("creado_en")
+
+  @@schema("public")
+  @@map("solicitudes_cambio_email")
 }
 
 // --- Cliente ---

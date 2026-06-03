@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { requireAnyRole } from "@/lib/auth/guards";
 import { signOutAction } from "@/lib/auth/actions";
 import { getClientByUserId } from "@/lib/clients/queries";
@@ -157,14 +158,22 @@ export default async function ClientDashboardPage({
               Bienvenido, {client.displayName}
             </p>
           </div>
-          <form action={signOutAction}>
-            <button
-              type="submit"
+          <div className="flex items-center gap-2">
+            <Link
+              href="/dashboard/profile"
               className="rounded border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50"
             >
-              Cerrar sesion
-            </button>
-          </form>
+              Mi Perfil
+            </Link>
+            <form action={signOutAction}>
+              <button
+                type="submit"
+                className="rounded border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50"
+              >
+                Cerrar sesion
+              </button>
+            </form>
+          </div>
         </div>
 
         {/* Resumen */}

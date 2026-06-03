@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentAuthUser } from "@/lib/auth/session";
-import { signInAction } from "@/lib/auth/actions";
+import { forgotPasswordAction } from "@/lib/auth/actions";
 
-export default async function LoginPage({
+export default async function ForgotPasswordPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; registered?: string; "password-reset"?: string }>;
+  searchParams: Promise<{ error?: string; "email-sent"?: string }>;
 }) {
   const user = await getCurrentAuthUser();
   if (user) {
@@ -15,26 +15,23 @@ export default async function LoginPage({
 
   const params = await searchParams;
   const error = params.error;
-  const registered = params.registered;
-  const passwordReset = params["password-reset"];
+  const emailSent = params["email-sent"];
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
       <div className="w-full max-w-sm space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">MYC</h1>
-          <p className="text-neutral-500">Inicia sesion en tu cuenta</p>
+          <h1 className="text-2xl font-bold">Recuperar contrasena</h1>
+          <p className="text-neutral-500">
+            Ingresa tu correo y te enviaremos un enlace para restablecer tu
+            contrasena.
+          </p>
         </div>
 
-        {registered === "true" && (
+        {emailSent === "true" && (
           <p className="rounded bg-green-50 p-3 text-sm text-green-800">
-            Cuenta creada. Ya puedes iniciar sesion.
-          </p>
-        )}
-
-        {passwordReset === "true" && (
-          <p className="rounded bg-green-50 p-3 text-sm text-green-800">
-            Contrasena actualizada correctamente. Inicia sesion con tu nueva contrasena.
+            Si el correo existe, recibiras un enlace para restablecer tu
+            contrasena. Revisa tu bandeja de entrada.
           </p>
         )}
 
@@ -44,7 +41,7 @@ export default async function LoginPage({
           </p>
         )}
 
-        <form action={signInAction} className="space-y-4">
+        <form action={forgotPasswordAction} className="space-y-4">
           <div>
             <label htmlFor="email" className="block text-sm font-medium">
               Email
@@ -59,42 +56,21 @@ export default async function LoginPage({
             />
           </div>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium">
-              Contrasena
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              required
-              autoComplete="current-password"
-              className="mt-1 block w-full rounded border border-neutral-300 px-3 py-2 text-sm"
-            />
-          </div>
-
           <button
             type="submit"
             className="w-full rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
           >
-            Ingresar
+            Enviar enlace
           </button>
         </form>
-
-        <p className="text-center text-sm text-neutral-500">
-          <Link href="/forgot-password" className="text-neutral-400 underline hover:text-neutral-700">
-            Olvidaste tu contrasena?
-          </Link>
-        </p>
 
         <p className="text-center text-sm text-neutral-500">
           <Link href="/" className="text-neutral-400 underline hover:text-neutral-700">
             Inicio
           </Link>
           {" · "}
-          No tienes cuenta?{" "}
-          <Link href="/register" className="text-neutral-900 underline">
-            Registrate
+          <Link href="/login" className="text-neutral-900 underline">
+            Volver al inicio de sesion
           </Link>
         </p>
       </div>

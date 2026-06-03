@@ -49,6 +49,13 @@ export default async function MarketingDashboardPage() {
           Ver obras
         </Link>
 
+        <Link
+          href="/dashboard/profile"
+          className="block w-full rounded border border-neutral-300 px-4 py-2 text-center text-sm font-medium hover:bg-neutral-50"
+        >
+          Mi Perfil
+        </Link>
+
         <form action={signOutAction}>
           <button
             type="submit"

@@ -41,6 +41,12 @@ export default async function AdminDashboardPage() {
               Cerrar sesion
             </button>
           </form>
+          <Link
+            href="/dashboard/profile"
+            className="rounded border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50"
+          >
+            Mi Perfil
+          </Link>
         </div>
 
         <div className="rounded border border-neutral-200 p-4 space-y-2 text-sm">

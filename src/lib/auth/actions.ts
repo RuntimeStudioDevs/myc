@@ -77,3 +77,57 @@ export async function signOutAction() {
   await supabase.auth.signOut();
   redirect("/login");
 }
+
+export async function forgotPasswordAction(formData: FormData) {
+  const supabase = await createClient();
+
+  const email = formData.get("email") as string;
+
+  if (!email) {
+    return redirect("/forgot-password?error=" + encodeURIComponent("El email es obligatorio."));
+  }
+
+  if (!email.includes("@") || !email.includes(".")) {
+    return redirect("/forgot-password?error=" + encodeURIComponent("El formato del email no es valido."));
+  }
+
+  const headersList = await headers();
+  const origin = headersList.get("origin") ?? headersList.get("host") ?? "";
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/reset-password`,
+  });
+
+  if (error) {
+    return redirect("/forgot-password?error=" + encodeURIComponent(error.message));
+  }
+
+  redirect("/forgot-password?email-sent=true");
+}
+
+export async function resetPasswordAction(formData: FormData) {
+  const supabase = await createClient();
+
+  const password = formData.get("password") as string;
+  const confirmPassword = formData.get("confirmPassword") as string;
+
+  if (!password || !confirmPassword) {
+    return redirect("/reset-password?error=" + encodeURIComponent("Ambos campos son obligatorios."));
+  }
+
+  if (password.length < 8) {
+    return redirect("/reset-password?error=" + encodeURIComponent("La contrasena debe tener al menos 8 caracteres."));
+  }
+
+  if (password !== confirmPassword) {
+    return redirect("/reset-password?error=" + encodeURIComponent("Las contrasenas no coinciden."));
+  }
+
+  const { error } = await supabase.auth.updateUser({ password });
+
+  if (error) {
+    return redirect("/reset-password?error=" + encodeURIComponent(error.message));
+  }
+
+  redirect("/login?password-reset=true");
+}
