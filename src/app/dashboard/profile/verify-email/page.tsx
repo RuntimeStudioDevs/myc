@@ -24,7 +24,7 @@ export default async function VerifyEmailPage({
 
         {sent === "true" && (
           <p className="rounded bg-green-50 p-3 text-sm text-green-800">
-            Codigo enviado. Revisa tu nuevo correo o la consola de desarrollo.
+            Te enviamos un codigo de 6 digitos al nuevo correo.
           </p>
         )}
 

@@ -103,7 +103,7 @@ export async function requestEmailChangeAction(formData: FormData) {
     data: { usedAt: new Date() },
   });
 
-  await prisma.emailChangeRequest.create({
+  const emailRequest = await prisma.emailChangeRequest.create({
     data: {
       userId: profile.id,
       newEmail: normalizedEmail,
@@ -113,10 +113,25 @@ export async function requestEmailChangeAction(formData: FormData) {
   });
 
   try {
-    sendVerificationCode(normalizedEmail, code);
+    await sendVerificationCode(normalizedEmail, code);
   } catch (e) {
-    console.error("[MYC-EMAIL] Failed to send:", e instanceof Error ? e.message : String(e));
-    return redirect("/dashboard/profile?error=" + encodeURIComponent("No se pudo enviar el codigo. Intenta de nuevo."));
+    const errorMessage = e instanceof Error ? e.message : String(e);
+
+    await prisma.emailChangeRequest.update({
+      where: { id: emailRequest.id },
+      data: { usedAt: new Date() },
+    });
+
+    if (errorMessage === "email-provider-not-configured") {
+      return redirect("/dashboard/profile?error=email-provider-not-configured");
+    }
+
+    if (errorMessage === "email-code-send-failed") {
+      return redirect("/dashboard/profile?error=email-code-send-failed");
+    }
+
+    console.error("[MYC-EMAIL] Failed to send:", errorMessage);
+    return redirect("/dashboard/profile?error=email-code-send-failed");
   }
 
   redirect("/dashboard/profile/verify-email?sent=true");

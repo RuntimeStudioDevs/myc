@@ -23,19 +23,38 @@ export async function sendVerificationCode(
 
   const resend = new Resend(RESEND_API_KEY);
 
-  const { error } = await resend.emails.send({
-    from: EMAIL_FROM,
-    to: email,
-    subject: "Codigo de verificacion MYC",
-    html: [
-      "<p>Tu codigo para cambiar el email es: <strong>" + code + "</strong></p>",
-      "<p>El codigo expira en <strong>10 minutos</strong>.</p>",
-      "<p>Si no solicitaste este cambio, ignora este correo.</p>",
-      "<p>No compartas el codigo con nadie.</p>",
-    ].join(""),
-  });
+  try {
+    const { error } = await resend.emails.send({
+      from: EMAIL_FROM,
+      to: email,
+      subject: "Codigo de verificacion MYC",
+      html: [
+        '<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1a1a1a;">',
+        '<p style="font-size:16px;margin:0 0 16px;">Tu codigo para cambiar el email es:</p>',
+        '<p style="font-size:28px;font-weight:bold;letter-spacing:6px;text-align:center;background:#f5f5f5;padding:16px;border-radius:8px;margin:0 0 24px;">' + code + "</p>",
+        '<p style="font-size:14px;color:#666;margin:0 0 8px;">El codigo expira en <strong>10 minutos</strong>.</p>',
+        '<p style="font-size:14px;color:#666;margin:0 0 8px;">No compartas este codigo con nadie.</p>',
+        '<p style="font-size:14px;color:#999;margin:0;">Si no solicitaste este cambio, ignora este correo.</p>',
+        "</div>",
+      ].join(""),
+    });
 
-  if (error) {
+    if (error) {
+      console.error(
+        "[MYC-EMAIL] Resend error:",
+        "name:", error.name,
+        "message:", error.message,
+      );
+      throw new Error("email-code-send-failed");
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message === "email-code-send-failed") {
+      throw e;
+    }
+    console.error(
+      "[MYC-EMAIL] Resend error:",
+      e instanceof Error ? e.message : String(e),
+    );
     throw new Error("email-code-send-failed");
   }
 }

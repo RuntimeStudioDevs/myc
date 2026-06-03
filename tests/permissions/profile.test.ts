@@ -55,6 +55,20 @@ vi.mock("@/lib/profile/email-sender", () => {
     sendVerificationCode: vi.fn(),
   };
 });
+
+vi.mock("resend", () => {
+  return {
+    Resend: vi.fn().mockImplementation(() => ({
+      emails: {
+        send: vi.fn(),
+      },
+    })),
+  };
+});
+
+vi.mock("server-only", () => {
+  return {};
+});
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
@@ -419,6 +433,101 @@ describe("requestEmailChangeAction", () => {
     const call = vi.mocked(redirect).mock.calls[0][0] as string;
     expect(call).toContain("verify-email?sent=true");
   });
+
+  it("sendVerificationCode falla con email-provider-not-configured", async () => {
+    mockAuthUser();
+    vi.mocked(prisma.user.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.emailChangeRequest.updateMany).mockResolvedValue({ count: 0 } as never);
+    vi.mocked(prisma.emailChangeRequest.create).mockResolvedValue({ id: "req-1" } as never);
+    vi.mocked(prisma.emailChangeRequest.update).mockResolvedValue({} as never);
+    vi.mocked(sendVerificationCode).mockRejectedValue(
+      new Error("email-provider-not-configured"),
+    );
+
+    await requestEmailChangeAction(form(
+      ["email", "new@test.local"],
+      ["currentPassword", "mypassword123"],
+    ));
+
+    expect(prisma.emailChangeRequest.update).toHaveBeenCalledWith({
+      where: { id: "req-1" },
+      data: { usedAt: expect.any(Date) },
+    });
+
+    const call = vi.mocked(redirect).mock.calls[0][0] as string;
+    expect(call).toContain("profile?error=email-provider-not-configured");
+  });
+
+  it("sendVerificationCode falla con email-code-send-failed", async () => {
+    mockAuthUser();
+    vi.mocked(prisma.user.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.emailChangeRequest.updateMany).mockResolvedValue({ count: 0 } as never);
+    vi.mocked(prisma.emailChangeRequest.create).mockResolvedValue({ id: "req-1" } as never);
+    vi.mocked(prisma.emailChangeRequest.update).mockResolvedValue({} as never);
+    vi.mocked(sendVerificationCode).mockRejectedValue(
+      new Error("email-code-send-failed"),
+    );
+
+    await requestEmailChangeAction(form(
+      ["email", "new@test.local"],
+      ["currentPassword", "mypassword123"],
+    ));
+
+    expect(prisma.emailChangeRequest.update).toHaveBeenCalledWith({
+      where: { id: "req-1" },
+      data: { usedAt: expect.any(Date) },
+    });
+
+    const call = vi.mocked(redirect).mock.calls[0][0] as string;
+    expect(call).toContain("profile?error=email-code-send-failed");
+  });
+
+  it("sendVerificationCode falla con error generico redirige a email-code-send-failed", async () => {
+    mockAuthUser();
+    vi.mocked(prisma.user.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.emailChangeRequest.updateMany).mockResolvedValue({ count: 0 } as never);
+    vi.mocked(prisma.emailChangeRequest.create).mockResolvedValue({ id: "req-1" } as never);
+    vi.mocked(prisma.emailChangeRequest.update).mockResolvedValue({} as never);
+    vi.mocked(sendVerificationCode).mockRejectedValue(
+      new Error("unknown-error"),
+    );
+
+    await requestEmailChangeAction(form(
+      ["email", "new@test.local"],
+      ["currentPassword", "mypassword123"],
+    ));
+
+    const call = vi.mocked(redirect).mock.calls[0][0] as string;
+    expect(call).toContain("profile?error=email-code-send-failed");
+  });
+
+  it("contrasena incorrecta no envia codigo", async () => {
+    mockAuthUser();
+    vi.mocked(createClient).mockReturnValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "user-1", email: "test@test.local" } },
+          error: null,
+        }),
+        getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+        updateUser: vi.fn(),
+        signInWithPassword: vi.fn().mockResolvedValue({
+          error: { message: "Invalid login credentials" },
+        }),
+      },
+    } as never);
+
+    await requestEmailChangeAction(form(
+      ["email", "new@test.local"],
+      ["currentPassword", "wrongpassword"],
+    ));
+
+    expect(sendVerificationCode).not.toHaveBeenCalled();
+    expect(prisma.emailChangeRequest.create).not.toHaveBeenCalled();
+
+    const call = vi.mocked(redirect).mock.calls[0][0] as string;
+    expect(call).toContain("profile?error=invalid-password");
+  });
 });
 
 // ---- verifyEmailChangeAction ----
@@ -556,5 +665,152 @@ describe("verifyEmailChangeAction", () => {
     expect(prisma.user.update).not.toHaveBeenCalled();
     const call = vi.mocked(redirect).mock.calls[0][0] as string;
     expect(call).toContain("verify-email?error=");
+  });
+});
+
+// ---- sendVerificationCode directo (email-sender) ----
+
+import { Resend } from "resend";
+
+describe("sendVerificationCode (email-sender)", () => {
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+    vi.clearAllMocks();
+    vi.resetModules();
+  });
+
+  it("en desarrollo sin RESEND_API_KEY muestra codigo en consola", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("RESEND_API_KEY", undefined);
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const actual = await vi.importActual<
+      typeof import("@/lib/profile/email-sender")
+    >("@/lib/profile/email-sender");
+
+    await actual.sendVerificationCode("test@test.local", "123456");
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "[MYC-EMAIL-CODE]",
+      "to:",
+      "test@test.local",
+      "code:",
+      "123456",
+    );
+    expect(Resend).not.toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
+  it("en produccion sin RESEND_API_KEY lanza email-provider-not-configured", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("RESEND_API_KEY", undefined);
+
+    const actual = await vi.importActual<
+      typeof import("@/lib/profile/email-sender")
+    >("@/lib/profile/email-sender");
+
+    await expect(
+      actual.sendVerificationCode("test@test.local", "123456"),
+    ).rejects.toThrow("email-provider-not-configured");
+
+    expect(Resend).not.toHaveBeenCalled();
+  });
+
+  it("con RESEND_API_KEY en desarrollo llama a Resend y no imprime codigo", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("RESEND_API_KEY", "re_test_key");
+    vi.stubEnv("EMAIL_FROM", "MYC <test@myc.local>");
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const mockSend = vi.fn().mockResolvedValue({ error: null });
+    vi.mocked(Resend).mockImplementation(function ResendMock() {
+      this.emails = { send: mockSend };
+    });
+
+    const actual = await vi.importActual<
+      typeof import("@/lib/profile/email-sender")
+    >("@/lib/profile/email-sender");
+
+    await actual.sendVerificationCode("test@test.local", "123456");
+
+    expect(Resend).toHaveBeenCalledWith("re_test_key");
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: "MYC <test@myc.local>",
+        to: "test@test.local",
+        subject: "Codigo de verificacion MYC",
+      }),
+    );
+
+    const consoleCalls = consoleSpy.mock.calls.filter(
+      (c) => c[0] === "[MYC-EMAIL-CODE]",
+    );
+    expect(consoleCalls).toHaveLength(0);
+    consoleSpy.mockRestore();
+  });
+
+  it("con RESEND_API_KEY en produccion no imprime codigo", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("RESEND_API_KEY", "re_test_key");
+    vi.stubEnv("EMAIL_FROM", "MYC <test@myc.local>");
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const mockSend = vi.fn().mockResolvedValue({ error: null });
+    vi.mocked(Resend).mockImplementation(function ResendMock() {
+      this.emails = { send: mockSend };
+    });
+
+    const actual = await vi.importActual<
+      typeof import("@/lib/profile/email-sender")
+    >("@/lib/profile/email-sender");
+
+    await actual.sendVerificationCode("test@test.local", "987654");
+
+    expect(mockSend).toHaveBeenCalled();
+    const consoleCalls = consoleSpy.mock.calls.filter(
+      (c) => c[0] === "[MYC-EMAIL-CODE]",
+    );
+    expect(consoleCalls).toHaveLength(0);
+
+    const htmlArg = mockSend.mock.calls[0][0].html as string;
+    expect(htmlArg).toContain("987654");
+    expect(htmlArg).not.toContain("re_test_key");
+    consoleSpy.mockRestore();
+  });
+
+  it("si Resend retorna error lanza email-code-send-failed", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("RESEND_API_KEY", "re_test_key");
+
+    vi.mocked(Resend).mockImplementation(function ResendMock() {
+      this.emails = { send: vi.fn().mockResolvedValue({ error: { message: "fail" } }) };
+    });
+
+    const actual = await vi.importActual<
+      typeof import("@/lib/profile/email-sender")
+    >("@/lib/profile/email-sender");
+
+    await expect(
+      actual.sendVerificationCode("test@test.local", "123456"),
+    ).rejects.toThrow("email-code-send-failed");
+  });
+
+  it("no expone RESEND_API_KEY en el HTML del correo", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("RESEND_API_KEY", "re_secret_key_xyz");
+
+    const mockSend = vi.fn().mockResolvedValue({ error: null });
+    vi.mocked(Resend).mockImplementation(function ResendMock() {
+      this.emails = { send: mockSend };
+    });
+
+    const actual = await vi.importActual<
+      typeof import("@/lib/profile/email-sender")
+    >("@/lib/profile/email-sender");
+
+    await actual.sendVerificationCode("test@test.local", "123456");
+
+    const htmlArg = mockSend.mock.calls[0][0].html as string;
+    expect(htmlArg).not.toContain("re_secret_key_xyz");
   });
 });
