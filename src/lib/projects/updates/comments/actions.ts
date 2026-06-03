@@ -12,6 +12,12 @@ import {
 
 const MAX_CONTENT_LENGTH = 2000;
 
+function sanitizeReturnTo(value: string | null): string | null {
+  if (!value) return null;
+  if (value.startsWith("/dashboard")) return value;
+  return null;
+}
+
 export async function createUpdateCommentAction(formData: FormData) {
   const profile = await getCurrentUserProfile();
   if (!profile || !profile.active) {
@@ -20,14 +26,16 @@ export async function createUpdateCommentAction(formData: FormData) {
 
   const updateId = formData.get("updateId") as string;
   const content = formData.get("content") as string;
-  const returnTo = (formData.get("returnTo") as string) || null;
+  const returnTo = sanitizeReturnTo((formData.get("returnTo") as string) || null);
+
+  const fallbackProjects = returnTo ?? "/dashboard/projects";
 
   if (!updateId || !content || !content.trim()) {
-    return redirect("/dashboard/projects?error=missing-fields");
+    return redirect(`${fallbackProjects}?error=missing-fields`);
   }
 
   if (content.length > MAX_CONTENT_LENGTH) {
-    return redirect("/dashboard/projects?error=content-too-long");
+    return redirect(`${fallbackProjects}?error=content-too-long`);
   }
 
   const update = await prisma.projectUpdate.findUnique({
@@ -36,11 +44,35 @@ export async function createUpdateCommentAction(formData: FormData) {
   });
 
   if (!update || update.deletedAt) {
-    return redirect("/dashboard/projects?error=update-not-found");
+    return redirect(`${fallbackProjects}?error=update-not-found`);
   }
 
   if (!(await canCreateUpdateComment(profile, updateId))) {
-    return redirect("/dashboard/projects?error=not-authorized");
+    const projectFallback = returnTo ?? `/dashboard/projects/${update.projectId}`;
+    return redirect(`${projectFallback}?error=not-authorized`);
+  }
+
+  const normalizedContent = content.trim().replace(/\s+/g, " ");
+  const tenSecondsAgo = new Date(Date.now() - 10_000);
+
+  const recentDuplicate = await prisma.updateComment.findFirst({
+    where: {
+      updateId,
+      authorId: profile.id,
+      content: normalizedContent,
+      deletedAt: null,
+      createdAt: { gt: tenSecondsAgo },
+    },
+    select: { id: true },
+  });
+
+  if (recentDuplicate) {
+    revalidatePath(`/dashboard/projects/${update.projectId}`);
+    if (returnTo) {
+      revalidatePath(returnTo);
+      redirect(`${returnTo}?comment-created=true`);
+    }
+    redirect(`/dashboard/projects/${update.projectId}?comment-created=true`);
   }
 
   await prisma.updateComment.create({
@@ -67,16 +99,16 @@ export async function editUpdateCommentAction(formData: FormData) {
 
   const commentId = formData.get("commentId") as string;
   const content = formData.get("content") as string;
-  const returnTo = (formData.get("returnTo") as string) || null;
+  const returnTo = sanitizeReturnTo((formData.get("returnTo") as string) || null);
+
+  const fallbackProjects = returnTo ?? "/dashboard/projects";
 
   if (!commentId || !content || !content.trim()) {
-    const fallback = returnTo ?? "/dashboard/projects";
-    return redirect(`${fallback}?error=missing-fields`);
+    return redirect(`${fallbackProjects}?error=missing-fields`);
   }
 
   if (content.length > MAX_CONTENT_LENGTH) {
-    const fallback = returnTo ?? "/dashboard/projects";
-    return redirect(`${fallback}?error=content-too-long`);
+    return redirect(`${fallbackProjects}?error=content-too-long`);
   }
 
   const comment = await prisma.updateComment.findUnique({
@@ -85,13 +117,18 @@ export async function editUpdateCommentAction(formData: FormData) {
   });
 
   if (!comment || comment.deletedAt) {
-    const fallback = returnTo ?? "/dashboard/projects";
-    return redirect(`${fallback}?error=comment-not-found`);
+    return redirect(`${fallbackProjects}?error=comment-not-found`);
   }
 
   if (!(await canEditUpdateComment(profile, commentId))) {
-    const fallback = returnTo ?? "/dashboard/projects";
-    return redirect(`${fallback}?error=not-authorized`);
+    const updateForFallback = await prisma.projectUpdate.findUnique({
+      where: { id: comment.updateId },
+      select: { projectId: true },
+    });
+    const projectFallback = returnTo ?? (updateForFallback
+      ? `/dashboard/projects/${updateForFallback.projectId}`
+      : "/dashboard/projects");
+    return redirect(`${projectFallback}?error=not-authorized`);
   }
 
   const update = await prisma.projectUpdate.findUnique({
@@ -100,8 +137,7 @@ export async function editUpdateCommentAction(formData: FormData) {
   });
 
   if (!update) {
-    const fallback = returnTo ?? "/dashboard/projects";
-    return redirect(`${fallback}?error=update-not-found`);
+    return redirect(`${fallbackProjects}?error=update-not-found`);
   }
 
   await prisma.updateComment.update({
@@ -127,10 +163,12 @@ export async function deleteUpdateCommentAction(formData: FormData) {
   }
 
   const commentId = formData.get("commentId") as string;
-  const returnTo = (formData.get("returnTo") as string) || null;
+  const returnTo = sanitizeReturnTo((formData.get("returnTo") as string) || null);
+
+  const fallbackProjects = returnTo ?? "/dashboard/projects";
 
   if (!commentId) {
-    return redirect("/dashboard/projects?error=missing-fields");
+    return redirect(`${fallbackProjects}?error=missing-fields`);
   }
 
   const comment = await prisma.updateComment.findUnique({
@@ -139,11 +177,18 @@ export async function deleteUpdateCommentAction(formData: FormData) {
   });
 
   if (!comment || comment.deletedAt) {
-    return redirect("/dashboard/projects?error=comment-not-found");
+    return redirect(`${fallbackProjects}?error=comment-not-found`);
   }
 
   if (!(await canDeleteUpdateComment(profile, commentId))) {
-    return redirect("/dashboard/projects?error=not-authorized");
+    const updateForFallback = await prisma.projectUpdate.findUnique({
+      where: { id: comment.updateId },
+      select: { projectId: true },
+    });
+    const projectFallback = returnTo ?? (updateForFallback
+      ? `/dashboard/projects/${updateForFallback.projectId}`
+      : "/dashboard/projects");
+    return redirect(`${projectFallback}?error=not-authorized`);
   }
 
   const update = await prisma.projectUpdate.findUnique({
@@ -152,7 +197,7 @@ export async function deleteUpdateCommentAction(formData: FormData) {
   });
 
   if (!update) {
-    return redirect("/dashboard/projects?error=update-not-found");
+    return redirect(`${fallbackProjects}?error=update-not-found`);
   }
 
   await prisma.updateComment.update({

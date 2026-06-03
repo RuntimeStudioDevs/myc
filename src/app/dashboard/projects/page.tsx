@@ -7,6 +7,7 @@ import {
   updateProjectAction,
   archiveProjectAction,
 } from "@/lib/projects/actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default async function ProjectsPage({
   searchParams,
@@ -141,12 +142,13 @@ export default async function ProjectsPage({
                 type="date"
                 className="rounded border border-neutral-300 px-3 py-1.5 text-sm"
               />
-              <button
+              <SubmitButton
                 type="submit"
+                pendingText="Creando..."
                 className="col-span-2 rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
               >
                 Crear obra
-              </button>
+              </SubmitButton>
             </form>
           </section>
         )}
@@ -286,12 +288,13 @@ export default async function ProjectsPage({
                                   defaultValue={project.currentProgress}
                                   className="w-12 rounded border border-neutral-300 px-1 py-0.5 text-xs"
                                 />
-                                <button
+                                <SubmitButton
                                   type="submit"
+                                  pendingText="Guardando..."
                                   className="rounded bg-neutral-100 px-2 py-0.5 text-xs hover:bg-neutral-200"
                                 >
                                   Guardar
-                                </button>
+                                </SubmitButton>
                               </form>
                               {/* Archivar */}
                               <form action={archiveProjectAction}>
@@ -300,12 +303,13 @@ export default async function ProjectsPage({
                                   name="projectId"
                                   value={project.id}
                                 />
-                                <button
+                                <SubmitButton
                                   type="submit"
+                                  pendingText="Archivando..."
                                   className="rounded bg-red-50 px-2 py-0.5 text-xs text-red-700 hover:bg-red-100"
                                 >
                                   Archivar
-                                </button>
+                                </SubmitButton>
                               </form>
                             </div>
                           </td>

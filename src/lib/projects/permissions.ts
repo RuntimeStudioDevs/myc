@@ -36,7 +36,13 @@ export async function canReadProject(
   projectId: string,
 ): Promise<boolean> {
   if (profile.role === "super_admin") return true;
-  if (profile.role === "cliente") return false;
+  if (profile.role === "cliente") {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId, deletedAt: null },
+      select: { client: { select: { userId: true } } },
+    });
+    return project?.client?.userId === profile.id;
+  }
 
   return hasActiveProjectAssignment(profile.id, projectId);
 }
@@ -79,7 +85,7 @@ export async function getAssignmentFilter(): Promise<{
   }
 
   if (profile.role === "cliente") {
-    notFound();
+    redirect("/dashboard/client");
   }
 
   // super_admin ve todo, los demas filtran por asignacion

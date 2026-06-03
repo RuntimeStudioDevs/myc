@@ -6,6 +6,7 @@ import {
   updateClientAction,
   deactivateClientAction,
 } from "@/lib/clients/actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default async function ClientsPage({
   searchParams,
@@ -145,12 +146,13 @@ export default async function ClientsPage({
                   />
                 </div>
               </div>
-              <button
+              <SubmitButton
                 type="submit"
+                pendingText="Creando..."
                 className="col-span-2 rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
               >
                 Crear cliente
-              </button>
+              </SubmitButton>
             </form>
           </section>
         )}
@@ -242,12 +244,13 @@ export default async function ClientsPage({
                                 <option value="persona">Persona</option>
                                 <option value="empresa">Empresa</option>
                               </select>
-                              <button
+                              <SubmitButton
                                 type="submit"
+                                pendingText="Guardando..."
                                 className="rounded bg-neutral-100 px-2 py-0.5 text-xs hover:bg-neutral-200"
                               >
                                 Guardar
-                              </button>
+                              </SubmitButton>
                             </form>
                             {/* Desactivar */}
                             <form action={deactivateClientAction}>
@@ -256,12 +259,13 @@ export default async function ClientsPage({
                                 name="clientId"
                                 value={client.id}
                               />
-                              <button
+                              <SubmitButton
                                 type="submit"
+                                pendingText="Desactivando..."
                                 className="rounded bg-red-50 px-2 py-0.5 text-xs text-red-700 hover:bg-red-100"
                               >
                                 Desactivar
-                              </button>
+                              </SubmitButton>
                             </form>
                           </div>
                         </td>

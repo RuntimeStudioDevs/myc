@@ -27,77 +27,48 @@ import {
   destroyCloudinaryFile,
 } from "@/lib/cloudinary/service";
 
-export async function uploadUpdateFileAction(formData: FormData) {
-  const profile = await getCurrentUserProfile();
-  if (!profile || !profile.active) {
-    redirect("/login?error=inactive");
-  }
+interface UploadSingleResult {
+  ok: boolean;
+  error?: string;
+}
 
-  const updateId = formData.get("updateId") as string;
-  const projectId = formData.get("projectId") as string;
-  const file = formData.get("file") as File | null;
-  const returnTo = (formData.get("returnTo") as string) || null;
-
-  if (!updateId || !projectId || !file || file.size === 0) {
-    return redirect("/dashboard/projects?error=file-required");
+export async function uploadSingleUpdateFile(
+  file: File,
+  updateId: string,
+  projectId: string,
+  uploadedById: string,
+): Promise<UploadSingleResult> {
+  if (!file || file.size === 0) {
+    return { ok: false, error: "file-required" };
   }
 
   if (!isValidMimeType(file.type, ALLOWED_UPDATE_FILE_TYPES)) {
-    return redirect("/dashboard/projects?error=invalid-file-type");
+    return { ok: false, error: "invalid-file-type" };
   }
 
   if (!isValidExtension(file.name, file.type)) {
-    return redirect("/dashboard/projects?error=invalid-file-type");
+    return { ok: false, error: "invalid-file-type" };
   }
 
   const isVideo = file.type.startsWith("video/");
   if (!isValidFileSize(file.size, isVideo)) {
-    return redirect("/dashboard/projects?error=file-too-large");
-  }
-
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { id: true, deletedAt: true },
-  });
-
-  if (!project || project.deletedAt) {
-    return redirect("/dashboard/projects?error=project-not-found");
-  }
-
-  const update = await prisma.projectUpdate.findUnique({
-    where: { id: updateId },
-    select: { id: true, deletedAt: true },
-  });
-
-  if (!update || update.deletedAt) {
-    return redirect("/dashboard/projects?error=update-not-found");
-  }
-
-  if (!(await canUploadUpdateFile(profile, projectId))) {
-    const fallback = returnTo ?? `/dashboard/projects/${projectId}`;
-    return redirect(`${fallback}?error=not-authorized`);
+    return { ok: false, error: "file-too-large" };
   }
 
   if (isVideo) {
     const existingVideos = await prisma.updateFile.count({
-      where: {
-        updateId,
-        fileType: "video",
-        deletedAt: null,
-      },
+      where: { updateId, fileType: "video", deletedAt: null },
     });
     if (existingVideos >= 1) {
-      const fallback = returnTo ?? `/dashboard/projects/${projectId}`;
-      return redirect(`${fallback}?error=video-limit-reached`);
+      return { ok: false, error: "video-limit-reached" };
     }
   }
 
   const provider = resolveStorageProvider(file.type);
-  const fallback = returnTo ?? `/dashboard/projects/${projectId}`;
 
   if (provider === "cloudinary") {
     if (!isCloudinaryConfigured()) {
-      return redirect(`${fallback}?error=upload-failed`);
+      return { ok: false, error: "upload-failed" };
     }
 
     const isPdf = file.type === "application/pdf";
@@ -115,7 +86,7 @@ export async function uploadUpdateFileAction(formData: FormData) {
       });
     } catch (e) {
       console.error("[MYC-UPLOAD] Cloudinary upload failed:", e instanceof Error ? e.message : String(e));
-      return redirect(`${fallback}?error=upload-failed`);
+      return { ok: false, error: "upload-failed" };
     }
 
     try {
@@ -126,7 +97,7 @@ export async function uploadUpdateFileAction(formData: FormData) {
           url: cloudinaryResult.secureUrl,
           fileName: file.name || "archivo",
           size: file.size,
-          uploadedBy: profile.id,
+          uploadedBy: uploadedById,
           provider: "cloudinary",
           providerId: cloudinaryResult.publicId,
         },
@@ -136,10 +107,10 @@ export async function uploadUpdateFileAction(formData: FormData) {
         cloudinaryResult.publicId,
         cloudinaryResult.resourceType as "image" | "video" | "raw",
       );
-      return redirect(`${fallback}?error=upload-failed`);
+      return { ok: false, error: "upload-failed" };
     }
   } else {
-    const safeName = `${sanitizeFilename(file.name || "archivo")}`;
+    const safeName = sanitizeFilename(file.name || "archivo");
     const filePath = buildUpdateFilePath(projectId, updateId, safeName);
     const supabaseAdmin = createAdminClient();
 
@@ -153,7 +124,7 @@ export async function uploadUpdateFileAction(formData: FormData) {
 
     if (uploadError) {
       console.error("[MYC-UPLOAD] Supabase upload failed:", JSON.stringify(uploadError));
-      return redirect(`${fallback}?error=upload-failed`);
+      return { ok: false, error: "upload-failed" };
     }
 
     await prisma.updateFile.create({
@@ -163,10 +134,50 @@ export async function uploadUpdateFileAction(formData: FormData) {
         url: filePath,
         fileName: file.name || "archivo",
         size: file.size,
-        uploadedBy: profile.id,
+        uploadedBy: uploadedById,
         provider: "supabase",
       },
     });
+  }
+
+  return { ok: true };
+}
+
+export async function uploadUpdateFileAction(formData: FormData) {
+  const profile = await getCurrentUserProfile();
+  if (!profile || !profile.active) {
+    redirect("/login?error=inactive");
+  }
+
+  const updateId = formData.get("updateId") as string;
+  const projectId = formData.get("projectId") as string;
+  const file = formData.get("file") as File | null;
+  const returnTo = (formData.get("returnTo") as string) || null;
+
+  if (!updateId || !projectId || !file || file.size === 0) {
+    return redirect("/dashboard/projects?error=file-required");
+  }
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { id: true, deletedAt: true },
+  });
+
+  if (!project || project.deletedAt) {
+    return redirect("/dashboard/projects?error=project-not-found");
+  }
+
+  if (!(await canUploadUpdateFile(profile, projectId))) {
+    const fallback = returnTo ?? `/dashboard/projects/${projectId}`;
+    return redirect(`${fallback}?error=not-authorized`);
+  }
+
+  const result = await uploadSingleUpdateFile(file, updateId, projectId, profile.id);
+
+  const fallback = returnTo ?? `/dashboard/projects/${projectId}`;
+
+  if (!result.ok) {
+    return redirect(`${fallback}?error=${result.error ?? "upload-failed"}`);
   }
 
   revalidatePath(`/dashboard/projects/${projectId}`);

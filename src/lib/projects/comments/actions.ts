@@ -46,6 +46,29 @@ export async function createProjectCommentAction(formData: FormData) {
     return redirect(`${fallback}?error=not-authorized`);
   }
 
+  const normalizedContent = content.trim().replace(/\s+/g, " ");
+  const tenSecondsAgo = new Date(Date.now() - 10_000);
+
+  const recentDuplicate = await prisma.projectComment.findFirst({
+    where: {
+      projectId,
+      authorId: profile.id,
+      content: normalizedContent,
+      deletedAt: null,
+      createdAt: { gt: tenSecondsAgo },
+    },
+    select: { id: true },
+  });
+
+  if (recentDuplicate) {
+    if (returnTo) {
+      revalidatePath(returnTo);
+      redirect(`${returnTo}?comment-created=true`);
+    }
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    redirect(`/dashboard/projects/${projectId}?comment-created=true`);
+  }
+
   await prisma.projectComment.create({
     data: {
       projectId,

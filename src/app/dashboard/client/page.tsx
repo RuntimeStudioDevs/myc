@@ -29,6 +29,9 @@ import { generateSignedUrl } from "@/lib/projects/storage";
 import ProjectRealtimeListener from "@/components/realtime/project-realtime-listener";
 import { InlineCommentEditor } from "@/components/comments/inline-comment-editor";
 import { FilePreview } from "@/components/files/file-preview";
+import type { ImageItem } from "@/components/files/file-preview";
+import { ImageLightbox } from "@/components/files/image-lightbox";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default async function ClientDashboardPage({
   searchParams,
@@ -58,12 +61,7 @@ export default async function ClientDashboardPage({
             <p className="text-neutral-500">No se encontro informacion de cliente asociada a tu cuenta.</p>
           </div>
           <form action={signOutAction}>
-            <button
-              type="submit"
-              className="rounded border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50"
-            >
-              Cerrar sesion
-            </button>
+            <SubmitButton type="submit" pendingText="Saliendo..." className="rounded bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100">Cerrar sesion</SubmitButton>
           </form>
         </div>
       </main>
@@ -166,12 +164,7 @@ export default async function ClientDashboardPage({
               Mi Perfil
             </Link>
             <form action={signOutAction}>
-              <button
-                type="submit"
-                className="rounded border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50"
-              >
-                Cerrar sesion
-              </button>
+              <SubmitButton type="submit" pendingText="Saliendo..." className="rounded bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100">Cerrar sesion</SubmitButton>
             </form>
           </div>
         </div>
@@ -321,29 +314,45 @@ export default async function ClientDashboardPage({
                       </div>
                     )}
 
-                    {/* Archivos de obra */}
+                    {/* Documentos de obra */}
                     {projectFiles.length > 0 && (
                       <div className="border-t border-neutral-100 pt-4">
                         <p className="text-xs font-medium text-neutral-500 mb-2">
-                          Archivos ({projectFiles.length})
+                          Documentos de obra ({projectFiles.length})
                         </p>
                         <div className="space-y-1">
-                          {projectFiles.map(({ file, signedUrl }) => (
-                            <FilePreview
-                              key={file.id}
-                              fileName={file.fileName}
-                              signedUrl={signedUrl}
-                              size={file.size}
-                              fileType={file.fileType}
-                              projectId={project.id}
-                              fileId={file.id}
-                            />
-                          ))}
+                          {(() => {
+                            const imageItems: ImageItem[] = [];
+                            const docs: typeof projectFiles = [];
+                            for (const pf of projectFiles) {
+                              if (pf.file.fileType === "foto" || pf.file.fileType?.startsWith("image/")) {
+                                imageItems.push({ src: pf.signedUrl ?? "", alt: pf.file.fileName, fileName: pf.file.fileName });
+                              } else {
+                                docs.push(pf);
+                              }
+                            }
+                            return (
+                              <>
+                                {docs.map(({ file, signedUrl }) => (
+                                  <FilePreview
+                                    key={file.id}
+                                    fileName={file.fileName}
+                                    signedUrl={signedUrl}
+                                    size={file.size}
+                                    fileType={file.fileType}
+                                    projectId={project.id}
+                                    fileId={file.id}
+                                  />
+                                ))}
+                                {imageItems.length > 0 && <ImageLightbox images={imageItems} />}
+                              </>
+                            );
+                          })()}
                         </div>
                       </div>
                     )}
 
-                    {/* Actualizaciones */}
+                    {/* Avances */}
                     {updates.length > 0 && (
                       <div className="border-t border-neutral-100 pt-4 space-y-4">
                         <p className="text-sm font-medium">
@@ -389,17 +398,34 @@ export default async function ClientDashboardPage({
                               )}
                               {updateFiles.length > 0 && (
                                 <div className="space-y-1">
-                              {updateFiles.map(({ file, signedUrl }) => (
-                                <FilePreview
-                                  key={file.id}
-                                  fileName={file.fileName}
-                                  signedUrl={signedUrl}
-                                  size={file.size}
-                                  projectId={project.id}
-                                  updateId={update.id}
-                                  fileId={file.id}
-                                />
-                                  ))}
+                                <p className="text-xs font-medium text-neutral-500">Evidencia del avance</p>
+                              {(() => {
+                                const imageItems: ImageItem[] = [];
+                                const docs: typeof updateFiles = [];
+                                for (const uf of updateFiles) {
+                                  if (uf.file.fileType === "foto" || uf.file.fileType?.startsWith("image/")) {
+                                    imageItems.push({ src: uf.signedUrl ?? "", alt: uf.file.fileName, fileName: uf.file.fileName });
+                                  } else {
+                                    docs.push(uf);
+                                  }
+                                }
+                                return (
+                                  <>
+                                    {docs.map(({ file, signedUrl }) => (
+                                      <FilePreview
+                                        key={file.id}
+                                        fileName={file.fileName}
+                                        signedUrl={signedUrl}
+                                        size={file.size}
+                                        projectId={project.id}
+                                        updateId={update.id}
+                                        fileId={file.id}
+                                      />
+                                    ))}
+                                    {imageItems.length > 0 && <ImageLightbox images={imageItems} />}
+                                  </>
+                                );
+                              })()}
                                 </div>
                               )}
 
@@ -433,26 +459,12 @@ export default async function ClientDashboardPage({
                                           </p>
                                         </div>
                                         {canDelete && (
-                                          <form
-                                            action={deleteUpdateCommentAction}
-                                          >
-                                            <input
-                                              type="hidden"
-                                              name="commentId"
-                                              value={comment.id}
-                                            />
-                                            <input
-                                              type="hidden"
-                                              name="returnTo"
-                                              value={returnTo}
-                                            />
-                                            <button
-                                              type="submit"
-                                              className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-700 hover:bg-red-100 shrink-0"
+                                            <form
+                                              action={deleteUpdateCommentAction}
                                             >
-                                              Eliminar
-                                            </button>
-                                          </form>
+                                              ...
+                                              <SubmitButton type="submit" pendingText="Eliminando..." className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-700 hover:bg-red-100 shrink-0">Eliminar</SubmitButton>
+                                            </form>
                                         )}
                                       </div>
                                     ),
@@ -485,15 +497,10 @@ export default async function ClientDashboardPage({
                                       required
                                       className="flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
                                     />
-                                    <button
-                                      type="submit"
-                                      className="rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-800 shrink-0"
-                                    >
-                                      Enviar
-                                    </button>
-                                  </form>
-                                </div>
-                              )}
+                                      <SubmitButton type="submit" pendingText="Enviando..." className="rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-800 shrink-0">Enviar</SubmitButton>
+                                    </form>
+                                  </div>
+                                )}
                             </div>
                           ),
                         )}
@@ -535,23 +542,9 @@ export default async function ClientDashboardPage({
                                 </div>
                                 {canDelete && (
                                   <form action={deleteProjectCommentAction}>
-                                    <input
-                                      type="hidden"
-                                      name="commentId"
-                                      value={comment.id}
-                                    />
-                                    <input
-                                      type="hidden"
-                                      name="returnTo"
-                                      value={returnTo}
-                                    />
-                                    <button
-                                      type="submit"
-                                      className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-700 hover:bg-red-100 shrink-0"
-                                    >
-                                      Eliminar
-                                    </button>
-                                  </form>
+                                      ...
+                                      <SubmitButton type="submit" pendingText="Eliminando..." className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-700 hover:bg-red-100 shrink-0">Eliminar</SubmitButton>
+                                    </form>
                                 )}
                               </div>
                             ),
@@ -587,14 +580,9 @@ export default async function ClientDashboardPage({
                             required
                             className="flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
                           />
-                          <button
-                            type="submit"
-                            className="rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-800 shrink-0"
-                          >
-                            Enviar
-                          </button>
-                        </form>
-                      )}
+                            <SubmitButton type="submit" pendingText="Enviando..." className="rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-800 shrink-0">Enviar</SubmitButton>
+                          </form>
+                        )}
                     </div>
                   </section>
                 );

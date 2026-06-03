@@ -1,15 +1,25 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+interface ImageItem {
+  src: string;
+  alt: string;
+  fileName: string;
+}
+
 interface FilePreviewProps {
   fileName: string;
   signedUrl: string | null;
+  thumbnailUrl?: string | null;
   size: number;
   fileType?: string;
   projectId?: string;
   fileId?: string;
   updateId?: string;
   children?: ReactNode;
+  onImageClick?: (images: ImageItem[], index: number) => void;
+  imageGroup?: ImageItem[] | null;
+  imageIndex?: number;
 }
 
 function inferMimeType(fileName: string): string {
@@ -56,12 +66,16 @@ function TypeBadge({ mimeType }: { mimeType: string }) {
 export function FilePreview({
   fileName,
   signedUrl,
+  thumbnailUrl,
   size,
   fileType,
   projectId,
   fileId,
   updateId,
   children,
+  onImageClick,
+  imageGroup,
+  imageIndex,
 }: FilePreviewProps) {
   const mimeType = fileType
     ? fileType === "video"
@@ -76,11 +90,12 @@ export function FilePreview({
     : inferMimeType(fileName);
   const isImage = mimeType.startsWith("image/");
   const sizeLabel = formatSize(size);
+  const displayThumbUrl = thumbnailUrl ?? signedUrl;
 
-  const preview = isImage && signedUrl ? (
+  const preview = isImage && displayThumbUrl ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={signedUrl}
+      src={displayThumbUrl}
       alt={fileName}
       className="h-8 w-12 shrink-0 rounded object-cover"
     />
@@ -108,6 +123,14 @@ export function FilePreview({
     >
       Ver
     </Link>
+  ) : isImage && onImageClick && imageGroup && imageIndex !== undefined ? (
+    <button
+      type="button"
+      onClick={() => onImageClick(imageGroup, imageIndex)}
+      className="rounded bg-neutral-100 px-2 py-0.5 text-xs hover:bg-neutral-200 shrink-0"
+    >
+      Ver
+    </button>
   ) : signedUrl ? (
     <a
       href={signedUrl}
@@ -152,3 +175,5 @@ export function FilePreview({
     </div>
   );
 }
+
+export type { ImageItem, FilePreviewProps };
