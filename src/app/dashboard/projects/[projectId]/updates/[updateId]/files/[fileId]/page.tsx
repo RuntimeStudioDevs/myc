@@ -72,6 +72,14 @@ export default async function UpdateFileViewerPage({
     url: file.url,
   });
 
+  const backHref =
+    profile.role === "cliente"
+      ? "/dashboard/client"
+      : `/dashboard/projects/${projectId}#update-${updateId}`;
+
+  const backLabel =
+    profile.role === "cliente" ? "Volver a mis obras" : "Volver a obra";
+
   const downloadHref = `/dashboard/projects/${projectId}/updates/${updateId}/files/${fileId}/download`;
 
   return (
@@ -91,10 +99,10 @@ export default async function UpdateFileViewerPage({
               Descargar
             </a>
             <Link
-              href={`/dashboard/projects/${projectId}`}
+              href={backHref}
               className="rounded border border-neutral-300 px-3 py-1.5 text-sm font-medium hover:bg-neutral-50"
             >
-              Volver a obra
+              {backLabel}
             </Link>
           </div>
         </div>

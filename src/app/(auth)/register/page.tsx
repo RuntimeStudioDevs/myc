@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentAuthUser } from "@/lib/auth/session";
 import { signUpAction } from "@/lib/auth/actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default async function RegisterPage({
   searchParams,
@@ -73,12 +74,7 @@ export default async function RegisterPage({
             />
           </div>
 
-          <button
-            type="submit"
-            className="w-full rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-          >
-            Crear cuenta
-          </button>
+          <SubmitButton type="submit" pendingText="Creando..." className="w-full rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">Crear cuenta</SubmitButton>
         </form>
 
         <p className="text-center text-sm text-neutral-500">

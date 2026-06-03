@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentAuthUser } from "@/lib/auth/session";
 import { signInAction } from "@/lib/auth/actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default async function LoginPage({
   searchParams,
@@ -73,12 +74,7 @@ export default async function LoginPage({
             />
           </div>
 
-          <button
-            type="submit"
-            className="w-full rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-          >
-            Ingresar
-          </button>
+          <SubmitButton type="submit" pendingText="Ingresando..." className="w-full rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">Ingresar</SubmitButton>
         </form>
 
         <p className="text-center text-sm text-neutral-500">

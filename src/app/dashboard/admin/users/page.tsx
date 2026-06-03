@@ -6,6 +6,7 @@ import {
   updateInternalUserAction,
   deactivateInternalUserAction,
 } from "@/lib/admin/users/actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default async function AdminUsersPage({
   searchParams,
@@ -100,12 +101,13 @@ export default async function AdminUsersPage({
               <option value="ingeniero">Ingeniero</option>
               <option value="marketing">Marketing</option>
             </select>
-            <button
+            <SubmitButton
               type="submit"
+              pendingText="Creando..."
               className="col-span-2 rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
             >
               Crear usuario
-            </button>
+            </SubmitButton>
           </form>
         </section>
 
@@ -181,13 +183,14 @@ export default async function AdminUsersPage({
                                 name="active"
                                 value="true"
                               />
-                              <button
+                              <SubmitButton
                                 type="submit"
+                                pendingText="Guardando..."
                                 className="rounded bg-neutral-100 px-2 py-0.5 text-xs hover:bg-neutral-200"
                                 title="Guardar"
                               >
                                 Guardar
-                              </button>
+                              </SubmitButton>
                             </form>
 
                             {/* Desactivar */}
@@ -197,12 +200,13 @@ export default async function AdminUsersPage({
                                 name="userId"
                                 value={user.id}
                               />
-                              <button
+                              <SubmitButton
                                 type="submit"
+                                pendingText="Desactivando..."
                                 className="rounded bg-red-50 px-2 py-0.5 text-xs text-red-700 hover:bg-red-100"
                               >
                                 Desactivar
-                              </button>
+                              </SubmitButton>
                             </form>
                           </div>
                         ) : (

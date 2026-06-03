@@ -133,8 +133,8 @@ export default function PdfViewer({ fileUrl }: PdfViewerProps) {
                 <Page
                   pageNumber={i + 1}
                   scale={scale}
-                  renderTextLayer={false}
-                  renderAnnotationLayer={false}
+                  renderTextLayer={true}
+                  renderAnnotationLayer={true}
                   className="max-w-full"
                 />
               </div>

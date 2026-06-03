@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireActiveProfile } from "@/lib/auth/guards";
 import { verifyEmailChangeAction } from "@/lib/profile/actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default async function VerifyEmailPage({
   searchParams,
@@ -53,12 +54,7 @@ export default async function VerifyEmailPage({
             />
           </div>
 
-          <button
-            type="submit"
-            className="w-full rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-          >
-            Verificar codigo
-          </button>
+          <SubmitButton type="submit" pendingText="Verificando..." className="w-full rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">Verificar codigo</SubmitButton>
         </form>
 
         <div className="space-y-3">

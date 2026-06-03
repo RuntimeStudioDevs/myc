@@ -9,6 +9,7 @@ import {
   canEditProjectUpdate,
   canDeleteProjectUpdate,
 } from "@/lib/projects/updates/queries";
+import { uploadSingleUpdateFile } from "@/lib/projects/updates/files/actions";
 
 const VALID_STATUSES = [
   "planeacion",
@@ -53,6 +54,29 @@ export async function createProjectUpdateAction(formData: FormData) {
     );
   }
 
+  const normalizedTitle = title.trim().replace(/\s+/g, " ");
+  const normalizedDescription = description
+    ? description.trim().replace(/\s+/g, " ")
+    : null;
+  const tenSecondsAgo = new Date(Date.now() - 10_000);
+
+  const recentDuplicate = await prisma.projectUpdate.findFirst({
+    where: {
+      projectId,
+      authorId: profile.id,
+      title: normalizedTitle,
+      description: normalizedDescription,
+      deletedAt: null,
+      createdAt: { gt: tenSecondsAgo },
+    },
+    select: { id: true },
+  });
+
+  if (recentDuplicate) {
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    redirect(`/dashboard/projects/${projectId}?update-created=true`);
+  }
+
   // Validar estado opcional
   let newStatus:
     | (typeof VALID_STATUSES)[number]
@@ -93,6 +117,8 @@ export async function createProjectUpdateAction(formData: FormData) {
   const shouldArchive =
     newStatus === "completado" || newStatus === "cancelado";
 
+  let createdUpdateId: string;
+
   await prisma.$transaction(async (tx) => {
     // Crear actualizacion
     const update = await tx.projectUpdate.create({
@@ -105,6 +131,7 @@ export async function createProjectUpdateAction(formData: FormData) {
         resultingProgress: newProgress ?? null,
       },
     });
+    createdUpdateId = update.id;
 
     // Cambiar estado/progreso de la obra si aplica
     if (statusChanged || progressChanged) {
@@ -146,7 +173,40 @@ export async function createProjectUpdateAction(formData: FormData) {
     }
   });
 
+  const files = formData.getAll("files") as File[];
+  const fileErrors: string[] = [];
+  let videoCount = 0;
+
+  for (const file of files) {
+    if (!file || typeof file === "string" || file.size === 0) continue;
+
+    const result = await uploadSingleUpdateFile(
+      file,
+      createdUpdateId!,
+      projectId,
+      profile.id,
+    );
+
+    if (!result.ok) {
+      fileErrors.push(result.error ?? "upload-failed");
+    }
+
+    if (file.type.startsWith("video/")) {
+      videoCount++;
+      if (videoCount > 1) {
+        fileErrors.push("video-limit-reached");
+      }
+    }
+  }
+
   revalidatePath(`/dashboard/projects/${projectId}`);
+
+  if (fileErrors.length > 0) {
+    redirect(
+      `/dashboard/projects/${projectId}?update-created=true&file-error=${encodeURIComponent(fileErrors.join(", "))}`,
+    );
+  }
+
   redirect(`/dashboard/projects/${projectId}?update-created=true`);
 }
 

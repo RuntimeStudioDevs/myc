@@ -155,6 +155,20 @@ export const generateSignedUrl = cache(
   },
 );
 
+// Generar thumbnail URL optimizado para Cloudinary (cacheada por request)
+export const generateThumbnailUrl = cache(
+  async (record: {
+    provider?: string | null;
+    url: string;
+  }): Promise<string | null> => {
+    if (record.provider === "cloudinary" && record.url) {
+      const base = record.url.replace("/upload/", "/upload/c_thumb,w_200,h_200,q_auto,f_auto/");
+      return base;
+    }
+    return null;
+  },
+);
+
 // Decidir proveedor de storage segun MIME type
 export type StorageProvider = "supabase" | "cloudinary";
 

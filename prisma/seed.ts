@@ -27,7 +27,7 @@ import { createClient } from "@supabase/supabase-js";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 
-const SEED_PASSWORD = "Test123456!";
+const SEED_PASSWORD = "Test123456!" ;
 
 interface SeedUser {
   email: string;

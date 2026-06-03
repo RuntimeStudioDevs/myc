@@ -1,5 +1,9 @@
 import Link from "next/link";
-import { getAssignmentFilter, hasActiveProjectAssignment } from "@/lib/projects/permissions";
+import { notFound, redirect } from "next/navigation";
+import { getCurrentUserProfile } from "@/lib/auth/session";
+import {
+  canReadProject,
+} from "@/lib/projects/permissions";
 import { getProjectById } from "@/lib/projects/queries";
 import {
   listProjectAssignments,
@@ -66,6 +70,9 @@ import ProjectRealtimeListener from "@/components/realtime/project-realtime-list
 import { InlineCommentEditor } from "@/components/comments/inline-comment-editor";
 import { InlineUpdateEditor } from "@/components/updates/inline-update-editor";
 import { FilePreview } from "@/components/files/file-preview";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { ImageLightbox } from "@/components/files/image-lightbox";
+import type { ImageItem } from "@/components/files/file-preview";
 
 export default async function ProjectDetailPage({
   params,
@@ -90,25 +97,23 @@ export default async function ProjectDetailPage({
   const { projectId } = await params;
   const sp = await searchParams;
 
-  const { profile } = await getAssignmentFilter();
+  const profile = await getCurrentUserProfile();
 
-  const canView =
-    profile.role === "super_admin" ||
-    (await hasActiveProjectAssignment(profile.id, projectId));
+  if (!profile || !profile.active) {
+    redirect("/login?error=inactive");
+  }
+
+  const project = await getProjectById(projectId);
+  if (!project || project.deletedAt) {
+    notFound();
+  }
+
+  const canView = await canReadProject(profile, projectId);
 
   if (!canView) {
     return (
       <main className="flex min-h-screen items-center justify-center p-8">
         <p className="text-neutral-500">No tienes acceso a esta obra.</p>
-      </main>
-    );
-  }
-
-  const project = await getProjectById(projectId);
-  if (!project || project.deletedAt) {
-    return (
-      <main className="flex min-h-screen items-center justify-center p-8">
-        <p className="text-neutral-500">Obra no encontrada.</p>
       </main>
     );
   }
@@ -188,6 +193,14 @@ export default async function ProjectDetailPage({
         })),
       );
 
+      const updateImageItems: ImageItem[] = updateFilesWithUrls
+        .filter((f) => f.file.fileType === "foto" || f.file.fileType?.startsWith("image/"))
+        .map((f) => ({
+          src: f.signedUrl ?? "",
+          alt: f.file.fileName,
+          fileName: f.file.fileName,
+        }));
+
       return {
         update,
         canEdit,
@@ -196,6 +209,7 @@ export default async function ProjectDetailPage({
         comments: commentsWithPermissions,
         canAddUpdateFile,
         updateFiles: updateFilesWithUrls,
+        updateImageItems,
       };
     }),
   );
@@ -211,6 +225,14 @@ export default async function ProjectDetailPage({
       canDelete: await canDeleteProjectFile(profile, file.id),
     })),
   );
+
+  const projectImageItems: ImageItem[] = projectFilesWithUrls
+    .filter((f) => f.file.fileType === "foto" || f.file.fileType?.startsWith("image/"))
+    .map((f) => ({
+      src: f.signedUrl ?? "",
+      alt: f.file.fileName,
+      fileName: f.file.fileName,
+    }));
 
   return (
     <main className="flex min-h-screen flex-col items-center p-8">
@@ -239,10 +261,10 @@ export default async function ProjectDetailPage({
             </p>
           </div>
           <Link
-            href="/dashboard/projects"
+            href={profile.role === "cliente" ? "/dashboard/client" : "/dashboard/projects"}
             className="text-sm text-neutral-500 underline hover:text-neutral-900"
           >
-            Volver a obras
+            {profile.role === "cliente" ? "Volver a mis obras" : "Volver a obras"}
           </Link>
         </div>
 
@@ -370,12 +392,13 @@ export default async function ProjectDetailPage({
                                 <input
                                   type="hidden" name="assignmentId" value={a.id}
                                 />
-                                <button
+                                <SubmitButton
                                   type="submit"
+                                  pendingText="..."
                                   className="rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700 hover:bg-blue-100"
                                 >
                                   Hacer principal
-                                </button>
+                                </SubmitButton>
                               </form>
                             )}
                           {((canUnassignEngineers && a.role === "ingeniero") ||
@@ -387,12 +410,13 @@ export default async function ProjectDetailPage({
                               <input
                                 type="hidden" name="assignmentId" value={a.id}
                               />
-                              <button
-                                type="submit"
-                                className="rounded bg-red-50 px-2 py-0.5 text-xs text-red-700 hover:bg-red-100"
-                              >
-                                Desasignar
-                              </button>
+                                <SubmitButton
+                                  type="submit"
+                                  pendingText="..."
+                                  className="rounded bg-red-50 px-2 py-0.5 text-xs text-red-700 hover:bg-red-100"
+                                >
+                                  Desasignar
+                                </SubmitButton>
                             </form>
                           )}
                         </div>
@@ -419,9 +443,9 @@ export default async function ProjectDetailPage({
                     <option key={e.id} value={e.id}>{e.name} ({e.email})</option>
                   ))}
                 </select>
-                <button type="submit" className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800">
+                <SubmitButton type="submit" pendingText="Asignando..." className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800">
                   Asignar
-                </button>
+                </SubmitButton>
               </form>
             )}
             {canAssignMarketing && availableMarketing.length > 0 && (
@@ -434,9 +458,9 @@ export default async function ProjectDetailPage({
                     <option key={m.id} value={m.id}>{m.name} ({m.email})</option>
                   ))}
                 </select>
-                <button type="submit" className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800">
+                <SubmitButton type="submit" pendingText="Asignando..." className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800">
                   Asignar
-                </button>
+                </SubmitButton>
               </form>
             )}
             {availableEngineers.length === 0 && availableMarketing.length === 0 && (
@@ -486,20 +510,36 @@ export default async function ProjectDetailPage({
                   className="rounded border border-neutral-300 px-3 py-1.5 text-sm"
                 />
               </div>
-              <button
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-neutral-500">
+                  Evidencia del avance
+                </p>
+                <input
+                  type="file"
+                  name="files"
+                  multiple
+                  accept=".jpg,.jpeg,.png,.webp,.pdf,.mp4,.webm,.mov"
+                  className="w-full rounded border border-neutral-300 px-2 py-1 text-xs file:mr-2 file:rounded file:border-0 file:bg-neutral-100 file:px-1.5 file:py-0.5 file:text-xs file:font-medium file:text-neutral-700"
+                />
+                <p className="text-xs text-neutral-400">
+                  Opcional: adjunta fotos, PDF o 1 video corto como evidencia de este avance. Maximo 25 MB para video.
+                </p>
+              </div>
+              <SubmitButton
                 type="submit"
+                pendingText="Publicando actualizacion..."
                 className="rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
               >
                 Publicar actualizacion
-              </button>
+              </SubmitButton>
             </form>
           </section>
         )}
 
-        {/* Archivos generales de obra */}
+        {/* Documentos de obra */}
         <section className="space-y-4 rounded border border-neutral-200 p-4">
           <h2 className="font-medium">
-            Archivos de obra ({projectFiles.length})
+            Documentos de obra ({projectFiles.length})
           </h2>
 
           {canUploadFile && (
@@ -517,47 +557,74 @@ export default async function ProjectDetailPage({
                   required
                 />
                 <p className="text-xs text-neutral-400">
-                  PDF o imagen, maximo 10 MB
+                  Sube documentos generales de la obra: contratos, cartas, actas, planos, PDF o imagenes. Maximo 10 MB.
                 </p>
               </div>
-              <button
+              <SubmitButton
                 type="submit"
+                pendingText="Subiendo documento..."
                 className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 shrink-0"
               >
-                Subir
-              </button>
+                Subir documento
+              </SubmitButton>
             </form>
           )}
 
           {projectFilesWithUrls.length === 0 && !canUploadFile ? null : projectFilesWithUrls.length === 0 ? (
             <p className="text-sm text-neutral-400">
-              Sin archivos.
+              Sin documentos.
             </p>
           ) : (
             <div className="space-y-1">
-              {projectFilesWithUrls.map(({ file, signedUrl, canDelete }) => (
-                <FilePreview
-                  key={file.id}
-                  fileName={file.fileName}
-                  signedUrl={signedUrl}
-                  size={file.size}
-                  fileType={file.fileType}
-                  projectId={projectId}
-                  fileId={file.id}
-                >
-                  {canDelete && (
-                    <form action={deleteProjectFileAction}>
-                      <input type="hidden" name="fileId" value={file.id} />
-                      <button
-                        type="submit"
-                        className="rounded bg-red-50 px-2 py-0.5 text-xs text-red-700 hover:bg-red-100"
-                      >
-                        Eliminar
-                      </button>
-                    </form>
-                  )}
-                </FilePreview>
-              ))}
+              {projectFilesWithUrls
+                .filter((f) => f.file.fileType !== "foto" && !f.file.fileType?.startsWith("image/"))
+                .map(({ file, signedUrl, canDelete }) => (
+                  <FilePreview
+                    key={file.id}
+                    fileName={file.fileName}
+                    signedUrl={signedUrl}
+                    size={file.size}
+                    fileType={file.fileType}
+                    projectId={projectId}
+                    fileId={file.id}
+                  >
+                    {canDelete && (
+                      <form action={deleteProjectFileAction}>
+                        <input type="hidden" name="fileId" value={file.id} />
+                          <SubmitButton
+                            type="submit"
+                            pendingText="Eliminando..."
+                            className="rounded bg-red-50 px-2 py-0.5 text-xs text-red-700 hover:bg-red-100"
+                          >
+                            Eliminar
+                          </SubmitButton>
+                      </form>
+                    )}
+                  </FilePreview>
+                ))}
+              {projectImageItems.length > 0 && (
+                <>
+                  <p className="text-xs font-medium text-neutral-500 pt-2">Imagenes de obra</p>
+                <ImageLightbox images={projectImageItems}>
+                  {projectFilesWithUrls
+                    .filter((f) => f.file.fileType === "foto" || f.file.fileType?.startsWith("image/"))
+                    .map(({ file, canDelete }) =>
+                      canDelete ? (
+                        <form key={file.id} action={deleteProjectFileAction}>
+                          <input type="hidden" name="fileId" value={file.id} />
+                          <SubmitButton
+                            type="submit"
+                            pendingText="Eliminando..."
+                            className="rounded bg-red-50 px-2 py-0.5 text-xs text-red-700 hover:bg-red-100"
+                          >
+                            Eliminar
+                          </SubmitButton>
+                        </form>
+                      ) : null
+                    )}
+                </ImageLightbox>
+                </>
+              )}
             </div>
           )}
         </section>
@@ -579,12 +646,13 @@ export default async function ProjectDetailPage({
                 required
                 className="flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
               />
-              <button
+              <SubmitButton
                 type="submit"
+                pendingText="Enviando..."
                 className="rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-800 shrink-0"
               >
                 Enviar
-              </button>
+              </SubmitButton>
             </form>
           )}
 
@@ -625,12 +693,13 @@ export default async function ProjectDetailPage({
                         {canDelete && (
                           <form action={deleteProjectCommentAction}>
                             <input type="hidden" name="commentId" value={comment.id} />
-                            <button
-                              type="submit"
-                              className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-700 hover:bg-red-100"
-                            >
-                              Eliminar
-                            </button>
+                                    <SubmitButton
+                                      type="submit"
+                                      pendingText="Eliminando..."
+                                      className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-700 hover:bg-red-100"
+                                    >
+                                      Eliminar
+                                    </SubmitButton>
                           </form>
                         )}
                       </div>
@@ -651,9 +720,10 @@ export default async function ProjectDetailPage({
             </p>
           ) : (
             <div className="space-y-3">
-              {updatesWithComments.map(({ update, canEdit, canDelete, canAddComment, comments, canAddUpdateFile, updateFiles }) => (
+              {updatesWithComments.map(({ update, canEdit, canDelete, canAddComment, comments, canAddUpdateFile, updateFiles, updateImageItems }) => (
                   <div
                     key={update.id}
+                    id={`update-${update.id}`}
                     className="rounded border border-neutral-200 p-4 space-y-2"
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -676,12 +746,13 @@ export default async function ProjectDetailPage({
                           {canDelete && (
                             <form action={deleteProjectUpdateAction}>
                               <input type="hidden" name="updateId" value={update.id} />
-                              <button
+                              <SubmitButton
                                 type="submit"
+                                pendingText="Eliminando..."
                                 className="rounded bg-red-50 px-2 py-0.5 text-xs text-red-700 hover:bg-red-100"
                               >
                                 Eliminar
-                              </button>
+                              </SubmitButton>
                             </form>
                           )}
                         </div>
@@ -703,34 +774,62 @@ export default async function ProjectDetailPage({
                     )}
                     {updateFiles.length > 0 && (
                       <div className="space-y-1">
-                        {updateFiles.map(({ file, signedUrl, canDelete: canDeleteFile }) => (
-                          <FilePreview
-                            key={file.id}
-                            fileName={file.fileName}
-                            signedUrl={signedUrl}
-                            size={file.size}
-                            fileType={file.fileType}
-                            projectId={projectId}
-                            updateId={update.id}
-                            fileId={file.id}
-                          >
-                            {canDeleteFile && (
-                              <form action={deleteUpdateFileAction}>
-                                <input
-                                  type="hidden"
-                                  name="fileId"
-                                  value={file.id}
-                                />
-                                <button
-                                  type="submit"
-                                  className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-700 hover:bg-red-100"
-                                >
-                                  Eliminar
-                                </button>
-                              </form>
-                            )}
-                          </FilePreview>
-                        ))}
+                        <p className="text-xs font-medium text-neutral-500">Evidencia del avance</p>
+                        {updateFiles
+                          .filter((f) => f.file.fileType !== "foto" && !f.file.fileType?.startsWith("image/"))
+                          .map(({ file, signedUrl, canDelete: canDeleteFile }) => (
+                            <FilePreview
+                              key={file.id}
+                              fileName={file.fileName}
+                              signedUrl={signedUrl}
+                              size={file.size}
+                              fileType={file.fileType}
+                              projectId={projectId}
+                              updateId={update.id}
+                              fileId={file.id}
+                            >
+                              {canDeleteFile && (
+                                <form action={deleteUpdateFileAction}>
+                                  <input
+                                    type="hidden"
+                                    name="fileId"
+                                    value={file.id}
+                                  />
+                                  <SubmitButton
+                                    type="submit"
+                                    pendingText="Eliminando..."
+                                    className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-700 hover:bg-red-100"
+                                  >
+                                    Eliminar
+                                  </SubmitButton>
+                                </form>
+                              )}
+                            </FilePreview>
+                          ))}
+                        {updateImageItems.length > 0 && (
+                          <ImageLightbox images={updateImageItems}>
+                            {updateFiles
+                              .filter((f) => f.file.fileType === "foto" || f.file.fileType?.startsWith("image/"))
+                              .map(({ file, canDelete: canDeleteFile }) =>
+                                canDeleteFile ? (
+                                  <form key={file.id} action={deleteUpdateFileAction}>
+                                    <input
+                                      type="hidden"
+                                      name="fileId"
+                                      value={file.id}
+                                    />
+                                  <SubmitButton
+                                    type="submit"
+                                    pendingText="Eliminando..."
+                                    className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-700 hover:bg-red-100"
+                                  >
+                                    Eliminar
+                                  </SubmitButton>
+                                  </form>
+                                ) : null
+                              )}
+                          </ImageLightbox>
+                        )}
                       </div>
                     )}
 
@@ -759,15 +858,16 @@ export default async function ProjectDetailPage({
                               className="w-full rounded border border-neutral-300 px-2 py-1 text-xs file:mr-2 file:rounded file:border-0 file:bg-neutral-100 file:px-1.5 file:py-0.5 file:text-xs file:font-medium file:text-neutral-700"
                             />
                             <p className="text-xs text-neutral-400">
-                              Fotos, PDF o 1 video corto por actualización. Video máximo 25 MB.
+                              Adjunta evidencia para este avance: fotos, PDF o 1 video corto. Video maximo 25 MB.
                             </p>
                           </div>
-                          <button
+                          <SubmitButton
                             type="submit"
+                            pendingText="Subiendo evidencia..."
                             className="rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-800 shrink-0"
                           >
-                            Subir
-                          </button>
+                            Subir evidencia
+                          </SubmitButton>
                         </form>
                       </div>
                     )}
@@ -809,12 +909,13 @@ export default async function ProjectDetailPage({
                                   {canDeleteComment && (
                                     <form action={deleteUpdateCommentAction}>
                                       <input type="hidden" name="commentId" value={comment.id} />
-                                      <button
+                                      <SubmitButton
                                         type="submit"
+                                        pendingText="Eliminando..."
                                         className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-700 hover:bg-red-100"
                                       >
                                         Eliminar
-                                      </button>
+                                      </SubmitButton>
                                     </form>
                                   )}
                                 </div>
@@ -838,12 +939,13 @@ export default async function ProjectDetailPage({
                             required
                             className="flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
                           />
-                          <button
+                          <SubmitButton
                             type="submit"
+                            pendingText="Enviando..."
                             className="rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-800 shrink-0"
                           >
                             Enviar
-                          </button>
+                          </SubmitButton>
                         </form>
                       </div>
                     )}

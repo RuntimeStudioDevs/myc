@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireActiveProfile } from "@/lib/auth/guards";
 import { updateOwnPasswordAction, requestEmailChangeAction } from "@/lib/profile/actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default async function ProfilePage({
   searchParams,
@@ -116,12 +117,7 @@ export default async function ProfilePage({
               autoComplete="new-password"
               className="w-full rounded border border-neutral-300 px-3 py-1.5 text-sm"
             />
-            <button
-              type="submit"
-              className="w-full rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-            >
-              Actualizar contrasena
-            </button>
+            <SubmitButton type="submit" pendingText="Actualizando..." className="w-full rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">Actualizar contrasena</SubmitButton>
           </form>
         </section>
 
@@ -147,12 +143,7 @@ export default async function ProfilePage({
             <p className="text-xs text-neutral-400">
               Por seguridad, confirma tu contrasena actual. Luego enviaremos un codigo de 6 digitos al nuevo correo.
             </p>
-            <button
-              type="submit"
-              className="w-full rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-            >
-              Solicitar cambio de email
-            </button>
+            <SubmitButton type="submit" pendingText="Enviando..." className="w-full rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">Solicitar cambio de email</SubmitButton>
           </form>
         </section>
 
