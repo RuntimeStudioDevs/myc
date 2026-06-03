@@ -13,6 +13,7 @@ Plataforma interna para constructoras que permite administrar clientes, obras, a
 | PostgreSQL | — |
 | Supabase Auth | — |
 | Supabase Storage | — |
+| Resend | 6 |
 | Tailwind CSS | 4 |
 | Vitest | 4 |
 | ESLint | 9 |
@@ -57,8 +58,15 @@ Abrir [http://localhost:3000](http://localhost:3000).
 | `NEXT_PUBLIC_SUPABASE_URL` | URL publica del proyecto Supabase | Si | `.env.local` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clave anonima de Supabase (segura en cliente) | Si | `.env.local` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Clave de servicio de Supabase (NUNCA exponer en cliente) | Si | `.env.local` |
+| `RESEND_API_KEY` | API Key de Resend para envio de emails | Solo en prod | `.env.local` |
+| `EMAIL_FROM` | Email remitente verificado en Resend | Solo en prod | `.env.local` |
+| `CLOUDINARY_CLOUD_NAME` | Cloud name de Cloudinary | Si | `.env.local` |
+| `CLOUDINARY_API_KEY` | API Key de Cloudinary | Si | `.env.local` |
+| `CLOUDINARY_API_SECRET` | API Secret de Cloudinary | Si | `.env.local` |
 
 > **Nota:** `DATABASE_URL` y `DIRECT_URL` usan el Session Pooler de Supabase (Supavisor, puerto 5432) para compatibilidad con redes IPv4. `NEXT_PUBLIC_SUPABASE_ANON_KEY` es segura en el navegador; `SUPABASE_SERVICE_ROLE_KEY` solo se usa en server actions y nunca se expone al cliente.
+>
+> **Resend en desarrollo:** Si `RESEND_API_KEY` no esta configurada, el codigo de verificacion de email se imprime en consola con el prefijo `[MYC-EMAIL-CODE]`. En produccion es obligatorio configurar ambas variables y verificar el dominio en Resend. En modo sandbox (API key `re_*`), el destinatario debe estar autorizado en https://resend.com/emails.
 
 ## Scripts disponibles
 
@@ -68,7 +76,7 @@ Abrir [http://localhost:3000](http://localhost:3000).
 | `npm run build` | Compila el proyecto para produccion |
 | `npm run start` | Inicia el servidor en modo produccion |
 | `npm run lint` | Ejecuta ESLint en todo el proyecto |
-| `npx vitest run` | Ejecuta la suite de pruebas (74 tests en 6 archivos) |
+| `npx vitest run` | Ejecuta la suite de pruebas (209 tests en 8 archivos) |
 | `npx prisma generate` | Genera el cliente de Prisma en `src/generated/prisma` |
 | `npx prisma migrate dev` | Aplica migraciones pendientes en desarrollo |
 | `npm run db:seed` | Ejecuta el script de seed de la base de datos |
@@ -139,6 +147,8 @@ tests/
 | `/dashboard/marketing` | Panel de marketing | `super_admin`, `marketing` |
 | `/dashboard/projects` | Lista de obras | `super_admin`, `ingeniero`, `marketing` |
 | `/dashboard/projects/[projectId]` | Detalle de obra | Asignados + `super_admin` |
+| `/dashboard/profile` | Perfil de usuario (cambio de email, password) | Autenticados |
+| `/dashboard/profile/verify-email` | Verificar codigo de cambio de email | Autenticados |
 
 ## Roles y permisos
 
@@ -168,7 +178,7 @@ tests/
 
 ## Pruebas
 
-El proyecto usa **Vitest** con 74 tests en 6 archivos, enfocados en permisos:
+El proyecto usa **Vitest** con 209 tests en 8 archivos, enfocados en permisos:
 
 | Archivo | Funciones testeadas |
 |---|---|

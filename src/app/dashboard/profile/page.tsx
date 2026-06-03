@@ -32,7 +32,21 @@ export default async function ProfilePage({
             La contrasena actual es incorrecta.
           </p>
         )}
-        {params.error && params.error !== "password-required" && params.error !== "invalid-password" && (
+        {params.error === "email-provider-not-configured" && (
+          <p className="rounded bg-red-50 p-3 text-sm text-red-800">
+            El envio de codigos no esta configurado. Contacta al administrador.
+          </p>
+        )}
+        {params.error === "email-code-send-failed" && (
+          <p className="rounded bg-red-50 p-3 text-sm text-red-800">
+            No se pudo enviar el codigo. Intenta nuevamente o contacta al administrador.
+          </p>
+        )}
+        {params.error &&
+          params.error !== "password-required" &&
+          params.error !== "invalid-password" &&
+          params.error !== "email-provider-not-configured" &&
+          params.error !== "email-code-send-failed" && (
           <p className="rounded bg-red-50 p-3 text-sm text-red-800">
             {decodeURIComponent(params.error)}
           </p>

@@ -6,6 +6,28 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) con
 
 ---
 
+## [2026-06-03] — Integracion y robustecimiento de Resend
+
+### Anadido
+
+- Envio de codigo de verificacion de email via Resend en `src/lib/profile/email-sender.ts`.
+- Manejo de excepciones de red/timeout de Resend con `try/catch` para loguear el error real sin exponer secretos.
+- Banners UI en `/dashboard/profile`: `email-provider-not-configured`, `email-code-send-failed`.
+- Variables `RESEND_API_KEY` y `EMAIL_FROM` documentadas en `.env.example` con instrucciones de sandbox.
+- `README.md` actualizado con Resend en stack y tabla de variables.
+
+### Cambiado
+
+- `requestEmailChangeAction` cancela la solicitud (`usedAt`) si falla el envio del codigo.
+- Mensaje `email-code-send-failed` en UI incluye "o contacta al administrador".
+
+### Tecnico
+
+- 11 tests nuevos de envio de email (209 total): casos dev/prod con/sin API key, errores de Resend, cancelacion de solicitud, no exposicion de secretos.
+- Comandos: `npx eslint --cache .` (0 errores), `npx vitest run` (209 tests), `npx next build` (exitoso).
+
+---
+
 ## [2026-05-27] — Auditoria de reglas de negocio y hardening
 
 ### Corregido
